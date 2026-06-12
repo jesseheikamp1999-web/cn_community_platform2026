@@ -4,6 +4,10 @@
     </IfModule>
 
     RewriteEngine On
+
+    RewriteCond %{HTTP_HOST} ^cncommunity\.nl$ [NC]
+    RewriteRule ^ https://www.cncommunity.nl%{REQUEST_URI} [L,R=301]
+
     RewriteCond %{HTTP:Authorization} .
     RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
     RewriteCond %{HTTP:X-XSRF-TOKEN} .

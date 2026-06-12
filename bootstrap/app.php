@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\EnsureInstallationCompleted;
 use App\Http\Middleware\EnsureUserHasPermission;
+use App\Http\Middleware\ForceCanonicalDomain;
 use App\Http\Middleware\LogUserActivity;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -15,6 +16,7 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->prepend(ForceCanonicalDomain::class);
         $middleware->append(EnsureInstallationCompleted::class);
         $middleware->web(append: [LogUserActivity::class]);
         $middleware->alias([

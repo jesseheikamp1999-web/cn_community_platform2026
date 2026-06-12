@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /staff/
+Disallow: /mijn-cn
+Disallow: /api/
+Sitemap: /sitemap.xml

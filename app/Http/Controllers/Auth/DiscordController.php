@@ -9,18 +9,22 @@ use App\Services\DiscordService;
 use App\Services\DiscordMemberSyncService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Throwable;
 
 class DiscordController extends Controller
 {
     public function redirect(Request $request)
     {
         $state = Str::random(40);
+        $redirectUri = $this->redirectUri();
         $request->session()->put('discord_oauth_state', $state);
+        $request->session()->put('discord_oauth_redirect_uri', $redirectUri);
 
         return redirect()->away('https://discord.com/oauth2/authorize?'.http_build_query([
             'client_id' => config('services.discord.client_id'),
-            'redirect_uri' => config('services.discord.redirect'),
+            'redirect_uri' => $redirectUri,
             'response_type' => 'code',
             'scope' => 'identify email guilds',
             'state' => $state,
@@ -29,32 +33,53 @@ class DiscordController extends Controller
 
     public function callback(Request $request, DiscordService $discord, DiscordMemberSyncService $memberSync)
     {
-        abort_unless(hash_equals((string) $request->session()->pull('discord_oauth_state'), (string) $request->state), 419);
+        if (!$request->filled(['code', 'state'])) {
+            return redirect()->route('discord.login')
+                ->withErrors(['discord' => 'Discord heeft geen geldige inlogcode teruggestuurd. Probeer opnieuw.']);
+        }
 
-        $tokens = $discord->exchangeCode($request->string('code'));
-        $profile = $discord->user($tokens['access_token']);
-        $member = $discord->guildMember($profile['id']);
-        $platformRole = $discord->platformRole($member);
+        $expectedState = (string) $request->session()->pull('discord_oauth_state');
+        abort_unless($expectedState !== '' && hash_equals($expectedState, (string) $request->state), 419);
 
-        $user = User::updateOrCreate(
-            ['discord_id' => $profile['id']],
-            [
-                'name' => $profile['global_name'] ?? $profile['username'],
-                'email' => $profile['email'] ?? null,
-                'discord_username' => $profile['username'],
-                'discord_avatar' => $profile['avatar'] ?? null,
-                'role' => $platformRole,
-            ]
+        $redirectUri = (string) $request->session()->pull(
+            'discord_oauth_redirect_uri',
+            $this->redirectUri()
         );
-        if ($member) {
-            $memberSync->storeMember($member);
-        }
 
-        if (!$user->permissions_locked) {
-            $this->syncPermissions($user);
+        try {
+            $tokens = $discord->exchangeCode((string) $request->string('code'), $redirectUri);
+            $profile = $discord->user($tokens['access_token']);
+            $member = $discord->guildMember($profile['id']);
+            $platformRole = $discord->platformRole($member);
+
+            $user = User::updateOrCreate(
+                ['discord_id' => $profile['id']],
+                [
+                    'name' => $profile['global_name'] ?? $profile['username'],
+                    'email' => $profile['email'] ?? null,
+                    'discord_username' => $profile['username'],
+                    'discord_avatar' => $profile['avatar'] ?? null,
+                    'role' => $platformRole,
+                ]
+            );
+            if ($member) {
+                $memberSync->storeMember($member);
+            }
+
+            if (!$user->permissions_locked) {
+                $this->syncPermissions($user);
+            }
+            Auth::login($user, true);
+            $request->session()->regenerate();
+        } catch (Throwable $exception) {
+            Log::warning('Discord OAuth login failed.', [
+                'message' => $exception->getMessage(),
+                'redirect_uri' => $redirectUri,
+            ]);
+
+            return redirect()->route('discord.login')
+                ->withErrors(['discord' => 'De Discord-login kon niet worden afgerond. Probeer opnieuw.']);
         }
-        Auth::login($user, true);
-        $request->session()->regenerate();
 
         return redirect()->intended(route('dashboard'))->with('success', 'Welkom terug bij CN Community.');
     }
@@ -92,5 +117,10 @@ class DiscordController extends Controller
         };
 
         $user->permissions()->sync($permissions);
+    }
+
+    private function redirectUri(): string
+    {
+        return rtrim((string) config('app.url'), '/').'/auth/discord/callback';
     }
 }

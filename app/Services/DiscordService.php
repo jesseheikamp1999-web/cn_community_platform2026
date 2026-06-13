@@ -9,14 +9,14 @@ use RuntimeException;
 
 class DiscordService
 {
-    public function exchangeCode(string $code): array
+    public function exchangeCode(string $code, ?string $redirectUri = null): array
     {
         return Http::asForm()->post('https://discord.com/api/v10/oauth2/token', [
             'client_id' => config('services.discord.client_id'),
             'client_secret' => config('services.discord.client_secret'),
             'grant_type' => 'authorization_code',
             'code' => $code,
-            'redirect_uri' => config('services.discord.redirect'),
+            'redirect_uri' => $redirectUri ?: config('services.discord.redirect'),
         ])->throw()->json();
     }
 

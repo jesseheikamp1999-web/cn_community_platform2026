@@ -10,12 +10,17 @@ class ForceCanonicalDomain
 {
     public function handle(Request $request, Closure $next): Response
     {
-        $canonicalHost = parse_url((string) config('app.url'), PHP_URL_HOST);
+        $appUrl = (string) config('app.url');
+        $canonicalHost = parse_url($appUrl, PHP_URL_HOST);
 
         if ($canonicalHost && $request->getHost() !== $canonicalHost) {
+            $canonicalScheme = parse_url($appUrl, PHP_URL_SCHEME) ?: $request->getScheme();
+            $isDiscordCallback = $request->is('auth/discord/callback');
+            $target = $isDiscordCallback ? '/auth/discord' : $request->getRequestUri();
+
             return redirect()->to(
-                $request->getScheme().'://'.$canonicalHost.$request->getRequestUri(),
-                301
+                $canonicalScheme.'://'.$canonicalHost.$target,
+                $isDiscordCallback ? 302 : 301
             );
         }
 

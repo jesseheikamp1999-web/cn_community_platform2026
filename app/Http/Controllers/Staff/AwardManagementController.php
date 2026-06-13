@@ -45,7 +45,33 @@ class AwardManagementController extends Controller
                 'categories' => fn ($query) => $query->withCount('nominations')->orderBy('sort_order')->orderBy('name'),
             ])
             ->latest('year')
-            ->firstOrFail();
+            ->first();
+
+        if (!$edition && $request->user()->hasPermission('awards.manage')) {
+            $isMiniAwards = $type === 'mini_awards';
+            $name = $isMiniAwards ? 'Mini Awards '.now()->year : 'CN Awards '.now()->year;
+            $slug = Str::slug($name);
+            $suffix = 2;
+            while (AwardEdition::where('slug', $slug)->exists()) {
+                $slug = Str::slug($name).'-'.$suffix++;
+            }
+
+            $edition = AwardEdition::create([
+                'name' => $name,
+                'slug' => $slug,
+                'type' => $type,
+                'year' => now()->year,
+                'status' => 'draft',
+                'settings' => $isMiniAwards
+                    ? ['voting' => ['allow_change' => true], 'finale' => ['finalists_count' => 3]]
+                    : ['voting' => ['allow_change' => true], 'finale' => ['finalists_count' => 5]],
+            ])->load([
+                'rounds' => fn ($query) => $query->orderBy('starts_at'),
+                'categories' => fn ($query) => $query->withCount('nominations')->orderBy('sort_order')->orderBy('name'),
+            ]);
+        }
+
+        abort_unless($edition, 404);
         $allNominations = Nomination::with(['category', 'user', 'juryScores'])
             ->whereHas('category', fn ($query) => $query->where('award_edition_id', $edition->id))
             ->orderByRaw("CASE status WHEN 'pending' THEN 1 WHEN 'approved' THEN 2 WHEN 'finalist' THEN 3 ELSE 4 END")

@@ -17,6 +17,7 @@ class Application extends Model
         'internal_note',
         'reviewed_by',
         'reviewed_at',
+        'archived_at',
     ];
 
     protected function casts(): array
@@ -24,6 +25,7 @@ class Application extends Model
         return [
             'answers' => 'array',
             'reviewed_at' => 'datetime',
+            'archived_at' => 'datetime',
         ];
     }
 

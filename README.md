@@ -59,7 +59,11 @@ Elke vijf minuten voor queues op shared hosting:
 php /var/www/vhosts/example.nl/httpdocs/artisan queue:work --stop-when-empty --tries=3
 ```
 
-Voeg aan `routes/console.php` geplande commando's toe als publicaties, Discord-deliveries en verjaardagsmeldingen verder worden uitgebreid.
+De scheduler verwerkt automatisch de ingestelde Awards-fasen, eenmalige Discord-aankondigingen en verjaardagsmeldingen voor MijnCN en Discord. Gebruik op deze installatie bijvoorbeeld:
+
+```bash
+cd /var/www/vhosts/amplitudefm.nl/cncommunity.nl && php artisan schedule:run
+```
 
 ## Discord-configuratie
 

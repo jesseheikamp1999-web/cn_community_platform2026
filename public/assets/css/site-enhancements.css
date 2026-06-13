@@ -585,6 +585,46 @@
     color: #df1822;
 }
 
+.awards-voting-ready {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 28px;
+    margin: 22px 0;
+    padding: 24px 28px;
+    border-radius: 18px;
+    background: #17191e;
+    color: #fff;
+}
+
+.awards-voting-ready span {
+    color: #ff5b61;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .15em;
+}
+
+.awards-voting-ready h2 {
+    margin: 6px 0;
+    font-size: 22px;
+}
+
+.awards-voting-ready p {
+    max-width: 680px;
+    margin: 0;
+    color: #b9bdc5;
+    font-size: 12px;
+    line-height: 1.65;
+}
+
+.awards-voting-ready > strong {
+    flex: none;
+    padding: 11px 14px;
+    border: 1px solid rgba(255, 255, 255, .15);
+    border-radius: 10px;
+    font-size: 11px;
+}
+
 .mini-archive-edition {
     padding: 35px 0;
     border-bottom: 1px solid #e6e7e9;
@@ -828,6 +868,11 @@
 
     .mini-awards-overview {
         grid-template-columns: 1fr;
+    }
+
+    .awards-voting-ready {
+        align-items: flex-start;
+        flex-direction: column;
     }
 
     .mini-awards-timeline {

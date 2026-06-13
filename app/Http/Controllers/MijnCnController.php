@@ -15,6 +15,7 @@ use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 use RuntimeException;
 
@@ -215,14 +216,17 @@ class MijnCnController extends Controller
 
         $startsAt = Carbon::parse($data['starts_at']);
         $endsAt = Carbon::parse($data['ends_at']);
-        $request->user()->absenceRequests()->create([
+        $absence = [
             'starts_on' => $startsAt->toDateString(),
             'ends_on' => $endsAt->toDateString(),
-            'starts_at' => $startsAt,
-            'ends_at' => $endsAt,
             'reason' => $data['reason'],
             'status' => 'approved',
-        ]);
+        ];
+        if (Schema::hasColumns('absence_requests', ['starts_at', 'ends_at'])) {
+            $absence['starts_at'] = $startsAt;
+            $absence['ends_at'] = $endsAt;
+        }
+        $request->user()->absenceRequests()->create($absence);
         if ($startsAt->lte(now()) && $endsAt->gte(now())) {
             $request->user()->staffProfile()->updateOrCreate(
                 ['user_id' => $request->user()->id],

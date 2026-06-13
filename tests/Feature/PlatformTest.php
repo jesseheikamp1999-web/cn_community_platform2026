@@ -17,6 +17,7 @@ use App\Models\Task;
 use App\Models\User;
 use App\Services\TaskWorkflowService;
 use App\Services\DiscordService;
+use App\Services\CommunityAutomationService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -164,6 +165,43 @@ class PlatformTest extends TestCase
             'from_nomination_id' => $first->id,
             'to_nomination_id' => $second->id,
         ]);
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $voter->id,
+            'type' => 'awards.vote_recorded',
+        ]);
+    }
+
+    public function test_awards_phase_and_discord_announcement_are_automated_once(): void
+    {
+        Http::fake();
+        config(['services.discord.webhook_url' => 'https://discord.test/webhook']);
+        AwardRound::query()->update(['is_active' => false]);
+        $edition = AwardEdition::create([
+            'name' => 'Automatische Awards',
+            'slug' => 'automatische-awards',
+            'type' => 'cn_awards',
+            'year' => 2029,
+            'status' => 'draft',
+        ]);
+        $round = AwardRound::create([
+            'award_edition_id' => $edition->id,
+            'name' => 'Stemronde',
+            'type' => 'public_vote',
+            'starts_at' => now()->subMinute(),
+            'ends_at' => now()->addDay(),
+            'is_active' => true,
+        ]);
+
+        $automation = app(CommunityAutomationService::class);
+        $this->assertSame(1, $automation->processAwardPhases());
+        $this->assertSame(0, $automation->processAwardPhases());
+
+        $this->assertSame('voting', $edition->fresh()->status);
+        $this->assertDatabaseHas('automation_logs', [
+            'key' => 'awards:round-opened:'.$round->id,
+            'type' => 'awards_round',
+        ]);
+        Http::assertSentCount(1);
     }
 
     public function test_awards_page_shows_one_selected_category_and_vote_state_per_category(): void
@@ -378,6 +416,23 @@ class PlatformTest extends TestCase
             ->assertSee('Mini Beheer Editie')
             ->assertSee('Eigen Mini Categorie')
             ->assertDontSee('Juryrapport toevoegen');
+    }
+
+    public function test_missing_mini_awards_edition_is_created_for_an_owner(): void
+    {
+        AwardEdition::where('type', 'mini_awards')->delete();
+        $owner = User::factory()->create(['role' => \App\Enums\UserRole::Owner]);
+
+        $this->actingAs($owner)->get(route('staff.mini-awards'))
+            ->assertOk()
+            ->assertSee('Mini Awards '.now()->year)
+            ->assertSee('Rondes en tijdstippen');
+
+        $this->assertDatabaseHas('award_editions', [
+            'type' => 'mini_awards',
+            'year' => now()->year,
+            'status' => 'draft',
+        ]);
     }
 
     public function test_owner_can_schedule_normal_and_mini_awards_with_times(): void
@@ -664,6 +719,32 @@ class PlatformTest extends TestCase
         ]);
     }
 
+    public function test_completed_hr_application_is_archived_and_hidden_from_active_work(): void
+    {
+        $owner = User::factory()->create(['role' => \App\Enums\UserRole::Owner]);
+        $application = Application::create([
+            'name' => 'Afgeronde Kandidaat',
+            'email' => 'afgerond@example.nl',
+            'position' => 'Helper',
+            'answers' => ['motivation' => 'Ik wil bijdragen aan de community.'],
+            'status' => 'interview',
+        ]);
+
+        $this->actingAs($owner)->patch(route('staff.hr.applications.update', $application), [
+            'status' => 'accepted',
+            'internal_note' => 'Aangenomen na een goed gesprek.',
+        ])->assertRedirect(route('staff.hr'));
+
+        $this->assertNotNull($application->fresh()->archived_at);
+        $this->actingAs($owner)->get(route('staff.hr'))
+            ->assertOk()
+            ->assertDontSee('Afgeronde Kandidaat');
+        $this->actingAs($owner)->get(route('staff.hr', ['status' => 'archived']))
+            ->assertOk()
+            ->assertSee('Afgeronde Kandidaat')
+            ->assertSee('Aangenomen');
+    }
+
     public function test_members_cannot_access_the_hr_workspace(): void
     {
         $member = User::factory()->create();
@@ -702,6 +783,37 @@ class PlatformTest extends TestCase
             ->assertSee($communityBirthday->name)
             ->assertSee($staffBirthday->name)
             ->assertDontSee('Prive Verjaardag');
+    }
+
+    public function test_birthday_notifications_are_sent_once_to_mijncn_and_discord(): void
+    {
+        Http::fake();
+        config(['services.discord.webhook_url' => 'https://discord.test/webhook']);
+        $birthdayUser = User::factory()->create([
+            'name' => 'Jarige Gebruiker',
+            'discord_id' => 'birthday-discord-id',
+            'birth_date' => today()->subYears(25),
+            'birthday_visibility' => 'community',
+        ]);
+        $recipient = User::factory()->create(['birthday_notifications' => true]);
+        $optedOut = User::factory()->create(['birthday_notifications' => false]);
+
+        $automation = app(CommunityAutomationService::class);
+        $this->assertSame(1, $automation->processBirthdays());
+        $this->assertSame(0, $automation->processBirthdays());
+
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $recipient->id,
+            'type' => 'community.birthday',
+        ]);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $optedOut->id,
+            'type' => 'community.birthday',
+        ]);
+        $this->assertDatabaseHas('automation_logs', [
+            'key' => 'birthday:'.$birthdayUser->id.':'.today()->format('Y'),
+        ]);
+        Http::assertSentCount(1);
     }
 
     public function test_authenticated_dashboard_renders_real_empty_states(): void
@@ -955,6 +1067,21 @@ class PlatformTest extends TestCase
             ->assertSee('Niet beschikbaar')
             ->assertSee('Helper')
             ->assertSee('https://cdn.discordapp.com/avatars/123456789/avatarhash.png?size=256', false);
+    }
+
+    public function test_public_pages_keep_working_before_absence_time_migration_is_applied(): void
+    {
+        Schema::table('absence_requests', function (Blueprint $table) {
+            $table->dropIndex(['starts_at']);
+            $table->dropIndex(['ends_at']);
+        });
+        Schema::table('absence_requests', function (Blueprint $table) {
+            $table->dropColumn(['starts_at', 'ends_at']);
+        });
+        User::factory()->create(['role' => \App\Enums\UserRole::Helper]);
+
+        $this->get(route('home'))->assertOk();
+        $this->get(route('staff'))->assertOk();
     }
 
     public function test_members_cannot_report_staff_absence(): void

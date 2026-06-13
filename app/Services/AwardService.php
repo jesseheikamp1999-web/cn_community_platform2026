@@ -166,6 +166,22 @@ class AwardService
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
+            DB::table('notifications')->insert([
+                'id' => (string) Str::uuid(),
+                'type' => 'awards.vote_recorded',
+                'notifiable_type' => User::class,
+                'notifiable_id' => $user->id,
+                'data' => json_encode([
+                    'title' => $existingVote ? 'Stem aangepast' : 'Stem opgeslagen',
+                    'message' => 'Jouw stem op '.$nomination->nominee_name.' voor '.$nomination->category->name.' is veilig geregistreerd.',
+                    'url' => $nomination->category->edition->type === 'mini_awards'
+                        ? route('mini.awards', ['categorie' => $nomination->category->slug])
+                        : route('awards', ['categorie' => $nomination->category->slug]),
+                ]),
+                'read_at' => null,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
 
             return $vote;
         });

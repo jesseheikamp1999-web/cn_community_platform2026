@@ -61,6 +61,13 @@
             @endforeach
         </div>
 
+        @if($activeVoteRound)
+            <section class="awards-voting-ready">
+                <div><span>STEMRONDE ACTIEF</span><h2>Jouw stem telt mee</h2><p>Kies per categorie één kandidaat. Je kunt je keuze aanpassen zolang de ronde open is; iedere wijziging blijft veilig in de stemhistorie staan.</p></div>
+                <strong>Open tot {{ $activeVoteRound->ends_at->translatedFormat('d F Y \o\m H:i') }}</strong>
+            </section>
+        @endif
+
         @if($selectedCategory)
             <section class="award-category-picker">
                 <div>

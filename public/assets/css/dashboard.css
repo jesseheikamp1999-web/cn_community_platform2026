@@ -887,7 +887,7 @@
 
 .hr-layout {
     display: grid;
-    grid-template-columns: minmax(0, 1.65fr) minmax(300px, .75fr);
+    grid-template-columns: minmax(0, 1.55fr) minmax(360px, .85fr);
     gap: 18px;
 }
 
@@ -913,6 +913,19 @@
 .hr-filters a.active {
     background: #17191f;
     color: #fff;
+}
+
+.hr-filters b {
+    margin-left: 3px;
+    font-size: 10px;
+}
+
+.hr-applications {
+    overflow: hidden;
+}
+
+.hr-application-list {
+    padding: 0 24px 24px;
 }
 
 .hr-application-list > article {
@@ -1011,13 +1024,37 @@
     min-width: 140px;
 }
 
+.hr-archive-note {
+    display: flex;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 14px 16px;
+    border-radius: 12px;
+    background: #f5f6f8;
+    color: #747b87;
+    font-size: 12px;
+}
+
 .hr-team-list article {
-    padding: 12px 0;
+    padding: 14px 20px;
     border-bottom: 1px solid #eceef1;
 }
 
-.hr-team-list article:last-child {
-    border-bottom: 0;
+.hr-team-list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    padding: 12px;
+}
+
+.hr-team-list article {
+    display: grid;
+    grid-template-columns: 46px minmax(0, 1fr);
+    align-items: center;
+    padding: 13px;
+    border: 1px solid #eceef1;
+    border-radius: 13px;
+    background: #fafafa;
 }
 
 .hr-team-list small {
@@ -1027,7 +1064,65 @@
 }
 
 .hr-team-list .availability {
+    display: inline-flex;
+    margin-top: 7px;
     font-size: 10px;
+}
+
+.hr-calendar-list {
+    padding: 8px 20px 20px;
+}
+
+.hr-calendar-list article {
+    display: grid;
+    grid-template-columns: 52px minmax(0, 1fr);
+    gap: 14px;
+    padding: 14px 0;
+    border-bottom: 1px solid #eceef1;
+}
+
+.hr-calendar-list article:last-child {
+    border-bottom: 0;
+}
+
+.hr-calendar-date {
+    display: grid;
+    place-content: center;
+    min-height: 52px;
+    border-radius: 13px;
+    background: #f3f4f6;
+    text-align: center;
+}
+
+.hr-calendar-list article.birthday .hr-calendar-date {
+    background: #fff0f1;
+    color: #df1822;
+}
+
+.hr-calendar-date strong {
+    font-size: 19px;
+    line-height: 1;
+}
+
+.hr-calendar-date span,
+.hr-calendar-list article > div:nth-child(2) > span {
+    margin-top: 4px;
+    color: #969ba5;
+    font-size: 8px;
+    font-weight: 800;
+    letter-spacing: .13em;
+}
+
+.hr-calendar-list h3 {
+    margin: 4px 0;
+    font-size: 13px;
+}
+
+.hr-calendar-list p {
+    margin: 0;
+    color: #7d838e;
+    font-size: 10px;
+    line-height: 1.5;
 }
 
 .hr-birthday-list article {
@@ -1233,6 +1328,11 @@
     .hr-layout {
         grid-template-columns: 1fr;
     }
+
+    .hr-team-list {
+        grid-template-columns: 1fr;
+    }
+
 }
 
 @media (max-width: 680px) {

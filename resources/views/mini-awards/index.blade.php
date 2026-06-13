@@ -52,6 +52,13 @@
             <span class="{{ in_array($edition->status, ['published', 'archived'], true) ? 'active' : '' }}">3. Uitslag</span>
         </div>
 
+        @if($activeVoteRound)
+            <section class="awards-voting-ready mini">
+                <div><span>MINI STEMRONDE ACTIEF</span><h2>Kies jouw favoriet</h2><p>Je hebt per mini-categorie één geldige stem en kunt die aanpassen tot de ronde sluit.</p></div>
+                <strong>Open tot {{ $activeVoteRound->ends_at->translatedFormat('d F Y \o\m H:i') }}</strong>
+            </section>
+        @endif
+
         @if($selectedCategory)
             <section class="award-category-picker">
                 <div><span>MINI-CATEGORIE</span><strong>Bekijk één categorie tegelijk</strong></div>

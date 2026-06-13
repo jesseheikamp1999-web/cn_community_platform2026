@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Schema;
 
 class AbsenceRequest extends Model
 {
@@ -30,6 +31,13 @@ class AbsenceRequest extends Model
 
     public function scopeCurrent(Builder $query): Builder
     {
+        if (!Schema::hasColumns('absence_requests', ['starts_at', 'ends_at'])) {
+            return $query
+                ->where('status', 'approved')
+                ->whereDate('starts_on', '<=', today())
+                ->whereDate('ends_on', '>=', today());
+        }
+
         return $query
             ->where('status', 'approved')
             ->where(function (Builder $period): void {

@@ -21,10 +21,7 @@ class PageController extends Controller
             'partners' => ['items' => Partner::where('status', 'active')->orderBy('name')->get()],
             'staff' => ['items' => User::whereNot('role', 'member')
                 ->with('staffProfile')
-                ->withExists(['absenceRequests as is_currently_absent' => fn ($query) => $query
-                    ->where('status', 'approved')
-                    ->whereDate('starts_on', '<=', today())
-                    ->whereDate('ends_on', '>=', today())])
+                ->withExists(['absenceRequests as is_currently_absent' => fn ($query) => $query->current()])
                 ->orderByRaw("CASE role
                     WHEN 'owner' THEN 1
                     WHEN 'management' THEN 2

@@ -517,6 +517,8 @@ class LegacyDatabaseUpgradeService
                 DB::table('absence_requests')->updateOrInsert(
                     ['user_id' => $userId, 'starts_on' => substr($row->starts_at, 0, 10), 'ends_on' => substr($row->ends_at, 0, 10)],
                     [
+                        'starts_at' => $row->starts_at,
+                        'ends_at' => $row->ends_at,
                         'reason' => trim($row->reason.' '.($row->note ?: '')),
                         'status' => match ($row->status) { 'active', 'ended' => 'approved', 'cancelled', 'rejected' => 'rejected', default => 'pending' },
                         'reviewed_by' => $this->existingUserId($row->reviewed_by),
@@ -529,8 +531,17 @@ class LegacyDatabaseUpgradeService
 
         $absentUserIds = DB::table('absence_requests')
             ->where('status', 'approved')
-            ->whereDate('starts_on', '<=', today())
-            ->whereDate('ends_on', '>=', today())
+            ->where(function ($query) {
+                $query->where(function ($timed) {
+                    $timed->whereNotNull('starts_at')
+                        ->where('starts_at', '<=', now())
+                        ->where('ends_at', '>=', now());
+                })->orWhere(function ($legacy) {
+                    $legacy->whereNull('starts_at')
+                        ->whereDate('starts_on', '<=', today())
+                        ->whereDate('ends_on', '>=', today());
+                });
+            })
             ->pluck('user_id');
         if ($absentUserIds->isNotEmpty()) {
             DB::table('staff_profiles')->whereIn('user_id', $absentUserIds)->update(['status' => 'absent', 'updated_at' => now()]);

@@ -538,6 +538,14 @@
     border: 1px solid #f0dadd;
 }
 
+.mini-awards-page {
+    padding-bottom: 72px;
+}
+
+.mini-awards-page .award-category-picker {
+    margin-top: 24px;
+}
+
 .mini-awards-overview h2 {
     margin: 8px 0;
     font: 750 28px/1.1 "Manrope", sans-serif;

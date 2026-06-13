@@ -281,15 +281,19 @@
 }
 
 .profile-overview-card {
-    padding: 28px;
-    background: linear-gradient(145deg, #17191e 0 145px, #fff 145px);
+    padding: 0 28px 28px;
+    overflow: hidden;
+    background: #fff;
 }
 
 .module-profile-head {
     display: flex;
     align-items: center;
     gap: 18px;
-    min-height: 105px;
+    min-height: 142px;
+    margin: 0 -28px;
+    padding: 28px;
+    background: linear-gradient(120deg, #17191e, #2b171a);
     color: #fff;
 }
 
@@ -321,6 +325,7 @@
 
 .module-profile-head h2 {
     margin: 7px 0 3px;
+    color: #fff;
     font: 750 22px "Manrope", sans-serif;
 }
 
@@ -791,6 +796,11 @@
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 16px;
+    padding: 24px;
+}
+
+.birthday-module .module-card-heading {
+    margin-bottom: 0;
 }
 
 .birthday-grid article {
@@ -1800,6 +1810,49 @@
     gap: 20px;
 }
 
+.round-schedule-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
+    padding: 22px;
+}
+
+.round-schedule-card {
+    padding: 18px;
+    border: 1px solid #e5e7eb;
+    border-radius: 16px;
+    background: #fafafa;
+}
+
+.round-schedule-card header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+.round-schedule-card header span {
+    color: #e31b23;
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.round-schedule-card header h3 {
+    margin: 0;
+    font-size: 16px;
+}
+
+.round-schedule-card .check-label {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+}
+
+.round-schedule-card .check-label input {
+    width: auto;
+}
+
 .award-command-grid {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -2235,7 +2288,8 @@
 
 @media (max-width: 1050px) {
     .awards-admin-grid,
-    .jury-score-grid {
+    .jury-score-grid,
+    .round-schedule-grid {
         grid-template-columns: 1fr 1fr;
     }
 
@@ -2255,7 +2309,8 @@
 @media (max-width: 620px) {
     .awards-admin-grid,
     .jury-score-grid,
-    .category-form-grid {
+    .category-form-grid,
+    .round-schedule-grid {
         grid-template-columns: 1fr;
     }
 

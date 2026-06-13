@@ -21,10 +21,7 @@ class HomeController extends Controller
             'partners' => Partner::where('status', 'active')->limit(6)->get(),
             'staff' => User::whereIn('role', ['helper', 'moderator', 'admin', 'management', 'owner'])
                 ->with('staffProfile')
-                ->withExists(['absenceRequests as is_currently_absent' => fn ($query) => $query
-                    ->where('status', 'approved')
-                    ->whereDate('starts_on', '<=', today())
-                    ->whereDate('ends_on', '>=', today())])
+                ->withExists(['absenceRequests as is_currently_absent' => fn ($query) => $query->current()])
                 ->orderByRaw("CASE role
                     WHEN 'owner' THEN 1
                     WHEN 'management' THEN 2

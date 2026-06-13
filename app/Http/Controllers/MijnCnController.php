@@ -11,6 +11,7 @@ use App\Models\Task;
 use App\Models\User;
 use App\Services\NomiAiService;
 use App\Services\TaskWorkflowService;
+use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -86,11 +87,7 @@ class MijnCnController extends Controller
         } elseif ($module === 'absences') {
             abort_unless($user->role->value !== 'member', 403);
             $data['absences'] = $user->absenceRequests()->latest()->paginate(20);
-            $data['currentAbsence'] = $user->absenceRequests()
-                ->where('status', 'approved')
-                ->whereDate('starts_on', '<=', today())
-                ->whereDate('ends_on', '>=', today())
-                ->first();
+            $data['currentAbsence'] = $user->absenceRequests()->current()->first();
         } elseif ($module === 'birthdays') {
             $isStaff = $user->role->value !== 'member';
             $data['birthdays'] = User::whereNotNull('birth_date')
@@ -211,13 +208,22 @@ class MijnCnController extends Controller
     {
         abort_unless($request->user()->role->value !== 'member', 403);
         $data = $request->validate([
-            'starts_on' => ['required', 'date'],
-            'ends_on' => ['required', 'date', 'after_or_equal:starts_on'],
+            'starts_at' => ['required', 'date'],
+            'ends_at' => ['required', 'date', 'after:starts_at'],
             'reason' => ['required', 'string', 'max:1000'],
         ]);
 
-        $request->user()->absenceRequests()->create($data + ['status' => 'approved']);
-        if ($data['starts_on'] <= today()->toDateString() && $data['ends_on'] >= today()->toDateString()) {
+        $startsAt = Carbon::parse($data['starts_at']);
+        $endsAt = Carbon::parse($data['ends_at']);
+        $request->user()->absenceRequests()->create([
+            'starts_on' => $startsAt->toDateString(),
+            'ends_on' => $endsAt->toDateString(),
+            'starts_at' => $startsAt,
+            'ends_at' => $endsAt,
+            'reason' => $data['reason'],
+            'status' => 'approved',
+        ]);
+        if ($startsAt->lte(now()) && $endsAt->gte(now())) {
             $request->user()->staffProfile()->updateOrCreate(
                 ['user_id' => $request->user()->id],
                 [

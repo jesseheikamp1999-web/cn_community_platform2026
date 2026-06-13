@@ -56,7 +56,13 @@ class AwardManagementController extends Controller
         $stats = [
             'nominations' => $allNominations->count(),
             'unique_nominators' => $allNominations->pluck('user_id')->unique()->count(),
-            'votes' => DB::table('votes')->whereNull('superseded_at')->where('is_valid', true)->count(),
+            'votes' => DB::table('votes')
+                ->join('nominations', 'nominations.id', '=', 'votes.nomination_id')
+                ->join('award_categories', 'award_categories.id', '=', 'nominations.award_category_id')
+                ->where('award_categories.award_edition_id', $edition->id)
+                ->whereNull('votes.superseded_at')
+                ->where('votes.is_valid', true)
+                ->count(),
             'finalists' => $allNominations->where('status', 'finalist')->count(),
             'jury_members' => DB::table('award_jury_assignments')->where('award_edition_id', $edition->id)->distinct('user_id')->count('user_id'),
         ];
@@ -87,6 +93,11 @@ class AwardManagementController extends Controller
     {
         abort_unless($request->user()->hasPermission('awards.manage'), 403);
         $data = $request->validate(['status' => ['required', 'in:draft,nominations,voting,jury,finale,published,archived']]);
+        if ($edition->type === 'mini_awards' && $data['status'] === 'jury') {
+            throw ValidationException::withMessages([
+                'status' => 'Mini Awards heeft geen juryfase.',
+            ]);
+        }
         $edition->update($data);
 
         return back()->with('success', 'De Awards-fase is bijgewerkt.');
@@ -102,8 +113,21 @@ class AwardManagementController extends Controller
             'ends_at' => ['required', 'date', 'after:starts_at'],
             'is_active' => ['nullable', 'boolean'],
         ]);
+        if ($edition->type === 'mini_awards' && in_array($data['type'], ['jury', 'finale'], true)) {
+            throw ValidationException::withMessages([
+                'type' => 'Mini Awards gebruikt alleen een nominatie- en stemronde.',
+            ]);
+        }
         $data['is_active'] = $request->boolean('is_active');
         $edition->rounds()->updateOrCreate(['type' => $data['type']], $data);
+
+        if ($data['type'] === 'nomination') {
+            $edition->update(['starts_at' => $data['starts_at']]);
+        } elseif ($data['type'] === 'public_vote') {
+            $edition->update(['ends_at' => $data['ends_at']]);
+        } elseif ($data['type'] === 'finale') {
+            $edition->update(['finale_at' => $data['starts_at']]);
+        }
 
         return back()->with('success', 'De ronde is opgeslagen.');
     }

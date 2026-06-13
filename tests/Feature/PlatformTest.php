@@ -380,6 +380,76 @@ class PlatformTest extends TestCase
             ->assertDontSee('Juryrapport toevoegen');
     }
 
+    public function test_owner_can_schedule_normal_and_mini_awards_with_times(): void
+    {
+        $owner = User::factory()->create(['role' => \App\Enums\UserRole::Owner]);
+        $normalEdition = AwardEdition::create([
+            'name' => 'Planning Awards',
+            'slug' => 'planning-awards',
+            'type' => 'cn_awards',
+            'year' => 2026,
+        ]);
+        $miniEdition = AwardEdition::create([
+            'name' => 'Planning Mini Awards',
+            'slug' => 'planning-mini-awards',
+            'type' => 'mini_awards',
+            'year' => 2027,
+        ]);
+
+        $this->actingAs($owner)->post(route('staff.awards.rounds.store', $normalEdition), [
+            'name' => 'Stemronde',
+            'type' => 'public_vote',
+            'starts_at' => '2026-09-01 18:30:00',
+            'ends_at' => '2026-09-14 21:45:00',
+            'is_active' => '1',
+        ])->assertSessionHasNoErrors();
+
+        $this->actingAs($owner)->post(route('staff.awards.rounds.store', $miniEdition), [
+            'name' => 'Mini nominaties',
+            'type' => 'nomination',
+            'starts_at' => '2026-07-01 12:15:00',
+            'ends_at' => '2026-07-08 20:00:00',
+            'is_active' => '1',
+        ])->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('award_rounds', [
+            'award_edition_id' => $normalEdition->id,
+            'type' => 'public_vote',
+            'starts_at' => '2026-09-01 18:30:00',
+            'ends_at' => '2026-09-14 21:45:00',
+        ]);
+        $this->assertDatabaseHas('award_rounds', [
+            'award_edition_id' => $miniEdition->id,
+            'type' => 'nomination',
+            'starts_at' => '2026-07-01 12:15:00',
+            'ends_at' => '2026-07-08 20:00:00',
+        ]);
+
+        $this->actingAs($owner)->get(route('staff.mini-awards'))
+            ->assertOk()
+            ->assertSee('Rondes en tijdstippen')
+            ->assertSee('2026-07-01T12:15', false);
+    }
+
+    public function test_mini_awards_reject_a_jury_round(): void
+    {
+        $owner = User::factory()->create(['role' => \App\Enums\UserRole::Owner]);
+        $edition = AwardEdition::create([
+            'name' => 'Mini zonder jury',
+            'slug' => 'mini-zonder-jury',
+            'type' => 'mini_awards',
+            'year' => 2028,
+        ]);
+
+        $this->actingAs($owner)->post(route('staff.awards.rounds.store', $edition), [
+            'name' => 'Jury',
+            'type' => 'jury',
+            'starts_at' => now()->addDay(),
+            'ends_at' => now()->addDays(2),
+            'is_active' => '1',
+        ])->assertSessionHasErrors('type');
+    }
+
     public function test_owner_can_submit_a_jury_assessment(): void
     {
         $owner = User::factory()->create(['role' => \App\Enums\UserRole::Owner, 'discord_id' => 'owner']);
@@ -870,8 +940,8 @@ class PlatformTest extends TestCase
         ]);
 
         $this->actingAs($staff)->post(route('mijncn.absences.store'), [
-            'starts_on' => today()->toDateString(),
-            'ends_on' => today()->addDays(2)->toDateString(),
+            'starts_at' => now()->subMinute()->format('Y-m-d H:i:s'),
+            'ends_at' => now()->addDays(2)->format('Y-m-d H:i:s'),
             'reason' => 'Tijdelijk niet aanwezig.',
         ])->assertSessionHasNoErrors();
 
@@ -892,10 +962,30 @@ class PlatformTest extends TestCase
         $member = User::factory()->create(['role' => \App\Enums\UserRole::Member]);
 
         $this->actingAs($member)->post(route('mijncn.absences.store'), [
-            'starts_on' => today()->toDateString(),
-            'ends_on' => today()->toDateString(),
+            'starts_at' => now()->format('Y-m-d H:i:s'),
+            'ends_at' => now()->addHour()->format('Y-m-d H:i:s'),
             'reason' => 'Niet van toepassing.',
         ])->assertForbidden();
+    }
+
+    public function test_future_staff_absence_only_becomes_public_at_its_start_time(): void
+    {
+        $staff = User::factory()->create([
+            'name' => 'Toekomstige Afwezigheid',
+            'role' => \App\Enums\UserRole::Helper,
+        ]);
+
+        $this->actingAs($staff)->post(route('mijncn.absences.store'), [
+            'starts_at' => now()->addHours(2)->format('Y-m-d H:i:s'),
+            'ends_at' => now()->addHours(4)->format('Y-m-d H:i:s'),
+            'reason' => 'Later vandaag niet aanwezig.',
+        ])->assertSessionHasNoErrors();
+
+        $this->assertFalse($staff->fresh()->isCurrentlyAbsent());
+        $this->get(route('staff'))
+            ->assertOk()
+            ->assertSee('Toekomstige Afwezigheid')
+            ->assertDontSee('Niet beschikbaar');
     }
 
     public function test_public_staff_is_sorted_by_platform_rank(): void

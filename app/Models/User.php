@@ -83,11 +83,7 @@ class User extends Authenticatable
 
     public function isCurrentlyAbsent(): bool
     {
-        return $this->absenceRequests()
-            ->where('status', 'approved')
-            ->whereDate('starts_on', '<=', today())
-            ->whereDate('ends_on', '>=', today())
-            ->exists();
+        return $this->absenceRequests()->current()->exists();
     }
 
     public function publicPosition(): string

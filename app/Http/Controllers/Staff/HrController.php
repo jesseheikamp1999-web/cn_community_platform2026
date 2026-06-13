@@ -26,10 +26,7 @@ class HrController extends Controller
 
         $staff = User::whereNot('role', 'member')
             ->with('staffProfile')
-            ->withExists(['absenceRequests as is_currently_absent' => fn ($query) => $query
-                ->where('status', 'approved')
-                ->whereDate('starts_on', '<=', today())
-                ->whereDate('ends_on', '>=', today())])
+            ->withExists(['absenceRequests as is_currently_absent' => fn ($query) => $query->current()])
             ->orderByRaw("CASE role WHEN 'owner' THEN 1 WHEN 'management' THEN 2 WHEN 'admin' THEN 3 WHEN 'moderator' THEN 4 WHEN 'helper' THEN 5 ELSE 6 END")
             ->orderBy('name')
             ->get();
@@ -46,8 +43,11 @@ class HrController extends Controller
             'upcomingBirthdays' => $upcomingBirthdays,
             'activeAbsences' => AbsenceRequest::with('user')
                 ->where('status', 'approved')
-                ->whereDate('ends_on', '>=', today())
-                ->orderBy('starts_on')
+                ->where(function ($query) {
+                    $query->where('ends_at', '>=', now())
+                        ->orWhere(fn ($legacy) => $legacy->whereNull('ends_at')->whereDate('ends_on', '>=', today()));
+                })
+                ->orderByRaw('COALESCE(starts_at, starts_on)')
                 ->get(),
             'applicationCounts' => Application::selectRaw('status, count(*) as total')->groupBy('status')->pluck('total', 'status'),
         ]);

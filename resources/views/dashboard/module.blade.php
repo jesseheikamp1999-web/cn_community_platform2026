@@ -214,7 +214,7 @@
                 @if($currentAbsence)
                     <div class="absence-current">
                         <span class="availability unavailable">Niet beschikbaar</span>
-                        <h3>{{ $currentAbsence->starts_on->translatedFormat('d M Y') }} tot {{ $currentAbsence->ends_on->translatedFormat('d M Y') }}</h3>
+                        <h3>{{ ($currentAbsence->starts_at ?? $currentAbsence->starts_on)->translatedFormat('d M Y H:i') }} tot {{ ($currentAbsence->ends_at ?? $currentAbsence->ends_on)->translatedFormat('d M Y H:i') }}</h3>
                         <p>{{ $currentAbsence->reason }}</p>
                         <form method="post" action="{{ route('mijncn.absences.cancel', $currentAbsence) }}">
                             @csrf @method('DELETE')
@@ -225,8 +225,8 @@
                     <form class="module-form" method="post" action="{{ route('mijncn.absences.store') }}">
                         @csrf
                         <div class="module-form-grid">
-                            <label>Vanaf<input type="date" name="starts_on" value="{{ old('starts_on', today()->toDateString()) }}" required></label>
-                            <label>Tot en met<input type="date" name="ends_on" value="{{ old('ends_on', today()->toDateString()) }}" required></label>
+                            <label>Vanaf<input type="datetime-local" name="starts_at" value="{{ old('starts_at', now()->format('Y-m-d\TH:i')) }}" required></label>
+                            <label>Tot en met<input type="datetime-local" name="ends_at" value="{{ old('ends_at', now()->addHours(4)->format('Y-m-d\TH:i')) }}" required></label>
                         </div>
                         <label>Reden<textarea name="reason" rows="5" maxlength="1000" required placeholder="Laat kort weten waarom en wanneer je weer bereikbaar bent.">{{ old('reason') }}</textarea></label>
                         <p class="form-help">Tijdens deze periode staat op de publieke staffpagina automatisch "Niet beschikbaar".</p>
@@ -240,7 +240,7 @@
                     @forelse($absences as $absence)
                         <article>
                             <div class="list-icon">@include('components.icon', ['name' => 'calendar'])</div>
-                            <div><strong>{{ $absence->starts_on->translatedFormat('d M Y') }} - {{ $absence->ends_on->translatedFormat('d M Y') }}</strong><p>{{ $absence->reason }}</p></div>
+                            <div><strong>{{ ($absence->starts_at ?? $absence->starts_on)->translatedFormat('d M Y H:i') }} - {{ ($absence->ends_at ?? $absence->ends_on)->translatedFormat('d M Y H:i') }}</strong><p>{{ $absence->reason }}</p></div>
                             <span class="status status-{{ $absence->status }}">{{ $absence->status === 'approved' ? 'Geregistreerd' : 'Ingetrokken' }}</span>
                         </article>
                     @empty

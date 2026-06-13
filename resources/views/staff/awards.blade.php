@@ -15,23 +15,24 @@
     <section class="award-command-grid">
         <article><span>Nominaties</span><strong>{{ $stats['nominations'] }}</strong><small>{{ $stats['unique_nominators'] }} unieke nominators</small></article>
         <article><span>Stemmen</span><strong>{{ $stats['votes'] }}</strong><small>geldige actieve stemmen</small></article>
-        <article><span>Finalisten</span><strong>{{ $stats['finalists'] }}</strong><small>top 5 per categorie</small></article>
+        <article><span>Finalisten</span><strong>{{ $stats['finalists'] }}</strong><small>{{ $isMiniAwards ? 'top 3 per categorie' : 'top 5 per categorie' }}</small></article>
         <article><span>{{ $isMiniAwards ? 'Categorieën' : 'Juryleden' }}</span><strong>{{ $isMiniAwards ? $edition->categories->count() : $stats['jury_members'] }}</strong><small>{{ $isMiniAwards ? 'eigen mini-categorieën' : 'gekoppelde panelleden' }}</small></article>
     </section>
 
     @if(auth()->user()->hasPermission('awards.manage'))
         <div class="awards-admin-grid">
-            @unless($isMiniAwards)<section class="module-card">
+            <section class="module-card">
                 <div class="module-card-heading"><div><span>INSTELLINGEN</span><h2>Awards status</h2></div></div>
                 <form class="module-form" method="post" action="{{ route('staff.awards.phase', $edition) }}">@csrf @method('PATCH')
                     <label>Huidige fase<select name="status">@foreach($isMiniAwards ? ['draft','nominations','voting','finale','published','archived'] : ['draft','nominations','voting','jury','finale','published','archived'] as $status)<option value="{{ $status }}" @selected($edition->status === $status)>{{ ucfirst($status) }}</option>@endforeach</select></label>
                     <button class="button button-primary">Fase opslaan</button>
                 </form>
                 <div class="admin-action-row">
-                    <form method="post" action="{{ route('staff.awards.winners.generate', $edition) }}">@csrf<button class="button button-secondary">Top 5 finalisten berekenen</button></form>
+                    <form method="post" action="{{ route('staff.awards.winners.generate', $edition) }}">@csrf<button class="button button-secondary">{{ $isMiniAwards ? 'Top 3 uitslag berekenen' : 'Top 5 finalisten berekenen' }}</button></form>
                     <form method="post" action="{{ route('staff.awards.winners.publish', $edition) }}">@csrf<button class="button button-primary">Hall of Fame publiceren</button></form>
                 </div>
-            </section>@endunless
+            </section>
+            @unless($isMiniAwards)
             <section class="module-card">
                 <div class="module-card-heading"><div><span>REVEAL</span><h2>Live winnaar onthullen</h2></div></div>
                 <p class="award-help">Reveal per positie, van 5 naar 1. De eerste plaats wordt pas winnaar zodra positie 1 wordt onthuld.</p>
@@ -41,7 +42,36 @@
                     @endforeach
                 </div>
             </section>
+            @else
+            <section class="module-card mini-control-card">
+                <div class="module-card-heading"><div><span>MINI AWARDS</span><h2>Korte ronde, eigen uitslag</h2></div></div>
+                <p class="award-help">Mini Awards werkt volledig los van de hoofdeditie: eigen categorieën, nominaties, stemmen en publicatie.</p>
+                <a class="button button-secondary" href="{{ route('mini.awards') }}">Publieke Mini Awards bekijken</a>
+            </section>
+            @endunless
         </div>
+
+        <section class="module-card module-section awards-schedule">
+            <div class="module-card-heading">
+                <div><span>PLANNING</span><h2>Rondes en tijdstippen</h2></div>
+                <strong>Europe/Amsterdam</strong>
+            </div>
+            <div class="round-schedule-grid">
+                @foreach($isMiniAwards ? ['nomination' => 'Nominaties', 'public_vote' => 'Stemronde'] : ['nomination' => 'Nominaties', 'public_vote' => 'Stemronde', 'jury' => 'Juryfase', 'finale' => 'Finale'] as $roundType => $roundLabel)
+                    @php($round = $edition->rounds->firstWhere('type', $roundType))
+                    <form class="module-form round-schedule-card" method="post" action="{{ route('staff.awards.rounds.store', $edition) }}">
+                        @csrf
+                        <input type="hidden" name="type" value="{{ $roundType }}">
+                        <input type="hidden" name="name" value="{{ $roundLabel }}">
+                        <header><span>{{ str_pad((string) $loop->iteration, 2, '0', STR_PAD_LEFT) }}</span><h3>{{ $roundLabel }}</h3></header>
+                        <label>Start<input type="datetime-local" name="starts_at" value="{{ old('starts_at', $round?->starts_at?->format('Y-m-d\TH:i')) }}" required></label>
+                        <label>Einde<input type="datetime-local" name="ends_at" value="{{ old('ends_at', $round?->ends_at?->format('Y-m-d\TH:i')) }}" required></label>
+                        <label class="check-label"><input type="checkbox" name="is_active" value="1" @checked($round?->is_active ?? true)> Ronde actief</label>
+                        <button class="button button-secondary button-small">Planning opslaan</button>
+                    </form>
+                @endforeach
+            </div>
+        </section>
 
         <section class="module-card module-section award-category-manager">
             <div class="module-card-heading">
@@ -161,12 +191,12 @@
     @endif
 
     <section class="module-card module-section">
-        <div class="module-card-heading"><div><span>FINALE</span><h2>Finalisten en revealstatus</h2></div></div>
+        <div class="module-card-heading"><div><span>FINALE</span><h2>{{ $isMiniAwards ? 'Mini Awards uitslag' : 'Finalisten en revealstatus' }}</h2></div></div>
         <div class="module-list">
             @forelse($winners as $winner)
-                <article><div class="list-rank">#{{ $winner->position }}</div><div><strong>{{ $winner->nominee_name }}</strong><p>{{ $winner->category_name }} &middot; community {{ round($winner->community_score, 1) }}% &middot; jury {{ round($winner->jury_score, 1) }}% &middot; totaal {{ round($winner->final_score, 1) }}%</p></div><span class="status {{ $winner->revealed_position_at ? 'status-approved' : 'status-pending' }}">{{ $winner->revealed_position_at ? 'Revealed' : 'Verborgen' }}</span></article>
+                <article><div class="list-rank">#{{ $winner->position }}</div><div><strong>{{ $winner->nominee_name }}</strong><p>{{ $winner->category_name }} &middot; community {{ round($winner->community_score, 1) }}%@unless($isMiniAwards) &middot; jury {{ round($winner->jury_score, 1) }}%@endunless &middot; totaal {{ round($winner->final_score, 1) }}%</p></div><span class="status {{ $winner->revealed_position_at ? 'status-approved' : 'status-pending' }}">{{ $winner->revealed_position_at ? 'Revealed' : 'Verborgen' }}</span></article>
             @empty
-                <div class="module-empty"><h3>Nog geen finalisten</h3><p>Bereken eerst de top 5 finalisten.</p></div>
+                <div class="module-empty"><h3>Nog geen finalisten</h3><p>{{ $isMiniAwards ? 'Bereken eerst de top 3 van deze Mini Awards.' : 'Bereken eerst de top 5 finalisten.' }}</p></div>
             @endforelse
         </div>
     </section>

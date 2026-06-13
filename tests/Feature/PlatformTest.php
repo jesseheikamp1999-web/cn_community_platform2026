@@ -548,6 +548,34 @@ class PlatformTest extends TestCase
         $this->assertDatabaseMissing('discord_members', ['discord_id' => 'discord-bot']);
     }
 
+    public function test_discord_member_sync_updates_linked_mijncn_role_and_standard_staff_title(): void
+    {
+        config(['services.discord.roles.management' => 'management-role']);
+
+        $user = User::factory()->create([
+            'discord_id' => 'discord-luca',
+            'role' => \App\Enums\UserRole::Helper,
+        ]);
+        $user->staffProfile()->create([
+            'position' => 'Helper',
+            'status' => 'active',
+            'joined_at' => today(),
+        ]);
+
+        app(\App\Services\DiscordMemberSyncService::class)->storeMember([
+            'user' => [
+                'id' => 'discord-luca',
+                'username' => 'luca',
+                'global_name' => 'Luca',
+            ],
+            'roles' => ['management-role'],
+        ]);
+
+        $this->assertSame(\App\Enums\UserRole::Management, $user->fresh()->role);
+        $this->assertSame('Management', $user->fresh()->staffProfile->position);
+        $this->assertSame('Management', $user->fresh()->publicPosition());
+    }
+
     public function test_members_only_see_role_based_staff_academies(): void
     {
         $member = User::factory()->create(['role' => \App\Enums\UserRole::Member]);

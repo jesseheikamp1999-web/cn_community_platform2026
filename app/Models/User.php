@@ -92,7 +92,17 @@ class User extends Authenticatable
 
     public function publicPosition(): string
     {
-        return $this->staffProfile?->position ?: $this->role->label();
+        $position = trim((string) $this->staffProfile?->position);
+        $roleLabels = array_map(
+            static fn (UserRole $role) => $role->label(),
+            UserRole::cases()
+        );
+
+        if ($position === '' || in_array($position, $roleLabels, true)) {
+            return $this->role->label();
+        }
+
+        return $position;
     }
 
     public function badges(): BelongsToMany

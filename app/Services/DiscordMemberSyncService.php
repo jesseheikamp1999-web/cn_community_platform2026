@@ -2,7 +2,9 @@
 
 namespace App\Services;
 
+use App\Enums\UserRole;
 use App\Models\DiscordMember;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
@@ -65,19 +67,44 @@ class DiscordMemberSyncService
             throw new RuntimeException('Discord-lid bevat geen gebruikers-ID.');
         }
 
-        return DB::transaction(fn () => DiscordMember::updateOrCreate(
-            ['discord_id' => $discordId],
-            [
+        return DB::transaction(function () use ($discordId, $member, $syncedAt, $user) {
+            $platformRole = $this->discord->platformRole($member);
+            $discordMember = DiscordMember::updateOrCreate(
+                ['discord_id' => $discordId],
+                [
                 'username' => $user['username'] ?? 'onbekend',
                 'display_name' => $member['nick'] ?? $user['global_name'] ?? $user['username'] ?? 'Onbekend lid',
                 'avatar' => $user['avatar'] ?? null,
-                'platform_role' => $this->discord->platformRole($member)->value,
+                'platform_role' => $platformRole->value,
                 'roles' => array_values(array_map('strval', $member['roles'] ?? [])),
                 'joined_at' => $member['joined_at'] ?? null,
                 'is_bot' => (bool) ($user['bot'] ?? false),
                 'is_active' => true,
                 'synced_at' => $syncedAt ?: now(),
-            ]
-        ));
+                ]
+            );
+
+            $this->syncMijnCnUser($discordId, $platformRole);
+
+            return $discordMember;
+        });
+    }
+
+    private function syncMijnCnUser(string $discordId, UserRole $platformRole): void
+    {
+        $mijnCnUser = User::where('discord_id', $discordId)->with('staffProfile')->first();
+        if (!$mijnCnUser) {
+            return;
+        }
+
+        $previousRoleLabel = $mijnCnUser->role->label();
+        if ($mijnCnUser->role !== $platformRole) {
+            $mijnCnUser->update(['role' => $platformRole]);
+        }
+
+        $position = trim((string) $mijnCnUser->staffProfile?->position);
+        if ($mijnCnUser->staffProfile && ($position === '' || $position === $previousRoleLabel)) {
+            $mijnCnUser->staffProfile->update(['position' => $platformRole->label()]);
+        }
     }
 }

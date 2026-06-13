@@ -51,6 +51,8 @@ class DiscordController extends Controller
             $profile = $discord->user($tokens['access_token']);
             $member = $discord->guildMember($profile['id']);
             $platformRole = $discord->platformRole($member);
+            $existingUser = User::where('discord_id', $profile['id'])->with('staffProfile')->first();
+            $previousRoleLabel = $existingUser?->role->label();
 
             $user = User::updateOrCreate(
                 ['discord_id' => $profile['id']],
@@ -62,6 +64,14 @@ class DiscordController extends Controller
                     'role' => $platformRole,
                 ]
             );
+
+            if (
+                $user->staffProfile
+                && ($user->staffProfile->position === null || $user->staffProfile->position === $previousRoleLabel)
+            ) {
+                $user->staffProfile->update(['position' => $platformRole->label()]);
+            }
+
             if ($member) {
                 $memberSync->storeMember($member);
             }

@@ -17,6 +17,7 @@ use App\Http\Controllers\Staff\AwardManagementController;
 use App\Http\Controllers\Staff\HrController;
 use App\Http\Controllers\Staff\AccessController;
 use App\Http\Controllers\Staff\ContentController;
+use App\Http\Controllers\StaffChatController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/install', [InstallController::class, 'index'])->name('install');
@@ -56,6 +57,19 @@ Route::middleware('auth')->group(function () {
     Route::post('/mijn-cn/academy/opdracht/{lesson}', [AcademyController::class, 'submitAssignment'])->name('academy.assignment.submit');
     Route::post('/mijn-cn/academy/toets/{lesson}', [AcademyController::class, 'submitAssessment'])->name('academy.assessment.submit');
     Route::get('/mijn-cn/academy/resultaat/{attempt}', [AcademyController::class, 'result'])->name('academy.attempt.result');
+    Route::get('/mijn-cn/chat', [StaffChatController::class, 'index'])->name('mijncn.chat');
+    Route::post('/mijn-cn/chat/start', [StaffChatController::class, 'start'])->name('mijncn.chat.start');
+    Route::post('/mijn-cn/chat/groep', [StaffChatController::class, 'createGroup'])->name('mijncn.chat.groups.store');
+    Route::prefix('api/chat')->name('chat.api.')->group(function () {
+        Route::get('/conversations', [StaffChatController::class, 'conversationsApi'])->name('conversations');
+        Route::get('/messages', [StaffChatController::class, 'messagesApi'])->name('messages');
+        Route::post('/send', [StaffChatController::class, 'sendApi'])->middleware('throttle:30,1')->name('send');
+        Route::post('/typing', [StaffChatController::class, 'typing'])->middleware('throttle:90,1')->name('typing');
+        Route::post('/read', [StaffChatController::class, 'read'])->name('read');
+        Route::get('/presence', [StaffChatController::class, 'presence'])->name('presence');
+        Route::patch('/messages/{message}', [StaffChatController::class, 'updateMessage'])->middleware('throttle:30,1')->name('messages.update');
+        Route::delete('/messages/{message}', [StaffChatController::class, 'deleteMessage'])->middleware('throttle:30,1')->name('messages.delete');
+    });
     Route::get('/mijn-cn/{module}', [MijnCnController::class, 'show'])
         ->whereIn('module', ['profile', 'notifications', 'inbox', 'nominations', 'votes', 'results', 'lessons', 'exams', 'certificates', 'badges', 'tasks', 'nomi', 'settings', 'absences', 'birthdays', 'community'])
         ->name('mijncn.module');

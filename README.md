@@ -104,6 +104,36 @@ Maak tokens aan via een beveiligde beheeractie:
 $token = $user->createToken('Discord Bot', ['discord:read', 'awards:read'])->plainTextToken;
 ```
 
+## MijnCN Staff Messenger
+
+De interne Messenger werkt volledig op Laravel, MySQL en `fetch`, zonder Node.js,
+Redis of WebSockets. Actieve gesprekken pollen iedere seconde en inactieve
+browsertabs iedere vijf seconden. Alleen berichten na het laatst bekende
+bericht-ID worden opgehaald; oudere berichten laden per 30 bij omhoog scrollen.
+
+Functies:
+
+- privegesprekken, Staff Chat, Management Chat en eigen groepen;
+- typing indicator, online-status, leesstatus en ongelezen badges;
+- bewerken, verwijderen, emoji en afbeeldingen tot 5 MB;
+- mobiel Messenger-scherm en een apart licht/donker thema;
+- deelnemercontrole, CSRF, servervalidatie en rate limiting.
+
+De tabellen hebben bewust een `chat_`-prefix. De bestaande `messages`-tabel blijft
+daardoor beschikbaar voor de klassieke MijnCN-inbox.
+
+Na deployment:
+
+```bash
+php artisan migrate --force
+php artisan storage:link
+php artisan optimize:clear
+php artisan route:cache
+```
+
+`storage:link` is nodig om verstuurde afbeeldingen via `/storage` te tonen. Op
+Plesk hoeft geen achtergrondproces of cronjob voor de chat te draaien.
+
 ## Beveiliging
 
 - Stemmen zijn uniek per gebruiker, ronde en categorie.

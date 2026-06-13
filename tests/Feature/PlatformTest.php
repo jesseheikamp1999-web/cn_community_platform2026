@@ -11,6 +11,8 @@ use App\Models\Badge;
 use App\Models\LearningPath;
 use App\Models\Nomination;
 use App\Models\Content;
+use App\Models\ChatConversation;
+use App\Models\ChatMessage;
 use App\Models\Permission;
 use App\Models\QuestionBank;
 use App\Models\Task;
@@ -23,6 +25,8 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class PlatformTest extends TestCase
@@ -1372,5 +1376,105 @@ class PlatformTest extends TestCase
 
         $this->assertDatabaseHas('quiz_attempts', ['id' => $attempt['attempt_id'], 'passed' => true, 'score' => 100]);
         $this->assertDatabaseCount('quiz_attempt_answers', 5);
+    }
+
+    public function test_staff_messenger_is_role_protected_and_creates_default_channels(): void
+    {
+        $member = User::factory()->create(['role' => \App\Enums\UserRole::Member]);
+        $helper = User::factory()->create(['role' => \App\Enums\UserRole::Helper]);
+        $management = User::factory()->create(['role' => \App\Enums\UserRole::Management]);
+
+        $this->actingAs($member)->get(route('mijncn.chat'))->assertForbidden();
+
+        $this->actingAs($helper)->get(route('mijncn.chat'))
+            ->assertOk()
+            ->assertSee('Staff Chat')
+            ->assertDontSee('Management Chat');
+
+        $this->actingAs($management)->get(route('mijncn.chat'))
+            ->assertOk()
+            ->assertSee('Staff Chat')
+            ->assertSee('Management Chat');
+
+        $this->assertDatabaseHas('chat_conversations', ['type' => 'staff', 'name' => 'Staff Chat']);
+        $this->assertDatabaseHas('chat_conversations', ['type' => 'management', 'name' => 'Management Chat']);
+    }
+
+    public function test_staff_can_send_incrementally_read_edit_and_delete_direct_messages(): void
+    {
+        $sender = User::factory()->create(['role' => \App\Enums\UserRole::Helper]);
+        $recipient = User::factory()->create(['role' => \App\Enums\UserRole::Moderator]);
+        $outsider = User::factory()->create(['role' => \App\Enums\UserRole::Admin]);
+
+        $this->actingAs($sender)->post(route('mijncn.chat.start'), [
+            'user_id' => $recipient->id,
+        ])->assertRedirect();
+
+        $conversation = ChatConversation::where('type', 'direct')->firstOrFail();
+        $response = $this->actingAs($sender)->postJson(route('chat.api.send'), [
+            'conversation_id' => $conversation->id,
+            'body' => 'Eerste intern bericht',
+        ])->assertCreated();
+        $messageId = $response->json('message.id');
+
+        $this->actingAs($recipient)->getJson(route('chat.api.messages', [
+            'conversation_id' => $conversation->id,
+            'after' => 0,
+        ]))->assertOk()
+            ->assertJsonCount(1, 'messages')
+            ->assertJsonPath('messages.0.body', 'Eerste intern bericht');
+        $this->assertDatabaseHas('chat_message_reads', [
+            'message_id' => $messageId,
+            'user_id' => $recipient->id,
+        ]);
+
+        $this->actingAs($recipient)->getJson(route('chat.api.messages', [
+            'conversation_id' => $conversation->id,
+            'after' => $messageId,
+        ]))->assertOk()->assertJsonCount(0, 'messages');
+
+        $this->actingAs($outsider)->getJson(route('chat.api.messages', [
+            'conversation_id' => $conversation->id,
+        ]))->assertForbidden();
+
+        $this->actingAs($sender)->patchJson(route('chat.api.messages.update', $messageId), [
+            'body' => 'Bijgewerkt intern bericht',
+        ])->assertOk()->assertJsonPath('message.edited', true);
+
+        $this->assertDatabaseHas('chat_messages', [
+            'id' => $messageId,
+            'body' => 'Bijgewerkt intern bericht',
+        ]);
+
+        $this->actingAs($sender)
+            ->deleteJson(route('chat.api.messages.delete', $messageId))
+            ->assertOk();
+
+        $this->assertNotNull(ChatMessage::findOrFail($messageId)->deleted_at);
+    }
+
+    public function test_staff_messenger_accepts_a_valid_image_without_text(): void
+    {
+        Storage::fake('public');
+        $sender = User::factory()->create(['role' => \App\Enums\UserRole::Helper]);
+        $recipient = User::factory()->create(['role' => \App\Enums\UserRole::Moderator]);
+        $conversation = ChatConversation::create([
+            'type' => 'direct',
+            'created_by' => $sender->id,
+        ]);
+        $conversation->participants()->attach([$sender->id, $recipient->id]);
+        $image = UploadedFile::fake()->createWithContent(
+            'screen.png',
+            base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=')
+        );
+
+        $this->actingAs($sender)->post(route('chat.api.send'), [
+            'conversation_id' => $conversation->id,
+            'image' => $image,
+        ], ['Accept' => 'application/json'])->assertCreated()->assertJsonCount(1, 'message.attachments');
+
+        $attachment = DB::table('chat_message_attachments')->first();
+        $this->assertNotNull($attachment);
+        Storage::disk('public')->assertExists($attachment->path);
     }
 }

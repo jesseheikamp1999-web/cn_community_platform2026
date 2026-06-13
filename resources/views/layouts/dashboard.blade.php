@@ -22,6 +22,16 @@
             ->whereNull('read_at')
             ->count()
         : 0;
+    $unreadChats = \Illuminate\Support\Facades\Schema::hasTable('chat_participants')
+        && \Illuminate\Support\Facades\Schema::hasTable('chat_messages')
+        && $currentUser->role->value !== 'member'
+        ? \Illuminate\Support\Facades\DB::table('chat_participants')
+            ->join('chat_messages', 'chat_messages.conversation_id', '=', 'chat_participants.conversation_id')
+            ->where('chat_participants.user_id', $currentUser->id)
+            ->where('chat_messages.sender_id', '!=', $currentUser->id)
+            ->whereRaw('chat_messages.created_at > COALESCE(chat_participants.last_read_at, ?)', ['1970-01-01 00:00:00'])
+            ->count()
+        : 0;
     $level = max(1, intdiv($currentUser->xp, 500) + 1);
     $levelXp = $currentUser->xp % 500;
 @endphp
@@ -43,6 +53,9 @@
         <a class="{{ request()->is('mijn-cn/birthdays') ? 'active' : '' }}" href="{{ route('mijncn.module', 'birthdays') }}">@include('components.icon', ['name' => 'calendar']) <span>Verjaardagen</span></a>
         @if($currentUser->role->value !== 'member')
             <a class="{{ request()->is('mijn-cn/absences') ? 'active' : '' }}" href="{{ route('mijncn.module', 'absences') }}">@include('components.icon', ['name' => 'calendar']) <span>Afwezigheid</span></a>
+            @if(\Illuminate\Support\Facades\Schema::hasTable('chat_conversations'))
+                <a class="{{ request()->routeIs('mijncn.chat*') ? 'active' : '' }}" href="{{ route('mijncn.chat') }}">@include('components.icon', ['name' => 'mail']) <span>Staff Messenger</span>@if($unreadChats)<b>{{ $unreadChats }}</b>@endif</a>
+            @endif
         @endif
         <small>AWARDS</small>
         <a class="{{ request()->is('mijn-cn/nominations') ? 'active' : '' }}" href="{{ route('mijncn.module', 'nominations') }}">@include('components.icon', ['name' => 'nomination']) <span>Mijn Nominaties</span></a>
@@ -84,7 +97,7 @@
         <form action="{{ route('search') }}"><span>&#8981;</span><input name="q" placeholder="Zoeken in CN..."><kbd>Ctrl K</kbd></form>
         <div class="topbar-actions">
             <a href="{{ route('mijncn.module', 'notifications') }}" aria-label="Meldingen">@include('components.icon', ['name' => 'bell']) @if($unreadNotifications)<b>{{ $unreadNotifications }}</b>@endif</a>
-            <a href="{{ route('mijncn.module', 'inbox') }}" aria-label="Inbox">@include('components.icon', ['name' => 'mail']) @if($unreadMessages)<b>{{ $unreadMessages }}</b>@endif</a>
+            <a href="{{ $currentUser->role->value !== 'member' && \Illuminate\Support\Facades\Schema::hasTable('chat_conversations') ? route('mijncn.chat') : route('mijncn.module', 'inbox') }}" aria-label="Berichten">@include('components.icon', ['name' => 'mail']) @if($unreadMessages + $unreadChats)<b>{{ $unreadMessages + $unreadChats }}</b>@endif</a>
             <div class="topbar-profile-menu">
                 <button class="topbar-user" type="button" data-profile-toggle aria-expanded="false" aria-haspopup="true">@include('components.user-avatar', ['user' => $currentUser])<div><strong>{{ $currentUser->name }}</strong><small>{{ $currentUser->role->label() }}</small></div><b aria-hidden="true">&#8964;</b></button>
                 <div class="profile-dropdown" data-profile-menu>

@@ -121,6 +121,9 @@ class DiscordController extends Controller
 
     private function redirectUri(): string
     {
-        return rtrim((string) config('app.url'), '/').'/auth/discord/callback';
+        return (string) (
+            config('services.discord.redirect')
+            ?: rtrim((string) config('app.url'), '/').'/auth/discord/callback'
+        );
     }
 }

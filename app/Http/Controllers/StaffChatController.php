@@ -10,7 +10,9 @@ use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
@@ -20,6 +22,10 @@ class StaffChatController extends Controller
     public function index(Request $request, StaffChatService $chat): View
     {
         $this->authorizeStaff($request->user());
+        if (!$this->schemaReady()) {
+            return view('dashboard.chat-setup');
+        }
+
         $chat->syncChannels($request->user());
 
         $conversations = $this->conversations($request->user());
@@ -40,6 +46,32 @@ class StaffChatController extends Controller
             ->get();
 
         return view('dashboard.chat', compact('conversations', 'selected', 'staffMembers'));
+    }
+
+    public function install(Request $request): RedirectResponse
+    {
+        abort_unless($request->user()->role->value === 'owner', 403);
+
+        try {
+            Artisan::call('migrate', [
+                '--force' => true,
+                '--path' => 'database/migrations/2026_06_13_120000_create_mijncn_messenger_tables.php',
+            ]);
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            return back()->withErrors([
+                'chat_installation' => 'De chatdatabase kon niet automatisch worden bijgewerkt. Controleer de schrijfrechten en databasegebruiker in Plesk.',
+            ]);
+        }
+
+        if (!$this->schemaReady()) {
+            return back()->withErrors([
+                'chat_installation' => 'De migratie is uitgevoerd, maar niet alle chattabellen zijn aangemaakt.',
+            ]);
+        }
+
+        return redirect()->route('mijncn.chat')->with('status', 'Staff Messenger is geïnstalleerd.');
     }
 
     public function conversationsApi(Request $request, StaffChatService $chat): JsonResponse
@@ -326,5 +358,18 @@ class StaffChatController extends Controller
             ['last_seen_at' => now(), 'is_online' => true, 'created_at' => now(), 'updated_at' => now()]
         );
         $user->update(['last_seen_at' => now()]);
+    }
+
+    private function schemaReady(): bool
+    {
+        return collect([
+            'chat_conversations',
+            'chat_participants',
+            'chat_messages',
+            'chat_message_reads',
+            'chat_typing_statuses',
+            'chat_user_presences',
+            'chat_message_attachments',
+        ])->every(fn (string $table): bool => Schema::hasTable($table));
     }
 }

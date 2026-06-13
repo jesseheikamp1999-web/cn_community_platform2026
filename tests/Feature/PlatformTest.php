@@ -1477,4 +1477,14 @@ class PlatformTest extends TestCase
         $this->assertNotNull($attachment);
         Storage::disk('public')->assertExists($attachment->path);
     }
+
+    public function test_only_owner_can_run_the_messenger_installer(): void
+    {
+        $helper = User::factory()->create(['role' => \App\Enums\UserRole::Helper]);
+        $owner = User::factory()->create(['role' => \App\Enums\UserRole::Owner]);
+
+        $this->actingAs($helper)->post(route('mijncn.chat.install'))->assertForbidden();
+        $this->actingAs($owner)->post(route('mijncn.chat.install'))
+            ->assertRedirect(route('mijncn.chat'));
+    }
 }

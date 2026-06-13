@@ -58,6 +58,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/mijn-cn/academy/toets/{lesson}', [AcademyController::class, 'submitAssessment'])->name('academy.assessment.submit');
     Route::get('/mijn-cn/academy/resultaat/{attempt}', [AcademyController::class, 'result'])->name('academy.attempt.result');
     Route::get('/mijn-cn/chat', [StaffChatController::class, 'index'])->name('mijncn.chat');
+    Route::post('/mijn-cn/chat/installeren', [StaffChatController::class, 'install'])->name('mijncn.chat.install');
     Route::post('/mijn-cn/chat/start', [StaffChatController::class, 'start'])->name('mijncn.chat.start');
     Route::post('/mijn-cn/chat/groep', [StaffChatController::class, 'createGroup'])->name('mijncn.chat.groups.store');
     Route::prefix('api/chat')->name('chat.api.')->group(function () {

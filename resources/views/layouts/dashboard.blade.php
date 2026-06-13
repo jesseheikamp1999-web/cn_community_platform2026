@@ -56,8 +56,9 @@
         @if($currentUser->hasPermission('staff.access'))
             <small>STAFF</small>
             <a class="{{ request()->routeIs('staff.dashboard') ? 'active' : '' }}" href="{{ route('staff.dashboard') }}">@include('components.icon', ['name' => 'result']) <span>Staff beheer</span></a>
-            @if($currentUser->hasPermission('awards.review') || $currentUser->hasPermission('jury.score'))
+            @if($currentUser->hasPermission('awards.review') || $currentUser->hasPermission('awards.manage') || $currentUser->hasPermission('jury.score'))
                 <a class="{{ request()->routeIs('staff.awards*') ? 'active' : '' }}" href="{{ route('staff.awards') }}">@include('components.icon', ['name' => 'award']) <span>Awards beheer</span></a>
+                <a class="{{ request()->routeIs('staff.mini-awards') ? 'active' : '' }}" href="{{ route('staff.mini-awards') }}">@include('components.icon', ['name' => 'award']) <span>Mini Awards beheer</span></a>
             @endif
             @if(in_array($currentUser->role->value, ['management', 'owner'], true))
                 <a class="{{ request()->routeIs('staff.hr*') ? 'active' : '' }}" href="{{ route('staff.hr') }}">@include('components.icon', ['name' => 'user']) <span>HR & sollicitaties</span></a>

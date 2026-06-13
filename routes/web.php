@@ -8,6 +8,7 @@ use App\Http\Controllers\CommunityFormController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\InstallController;
+use App\Http\Controllers\MiniAwardsController;
 use App\Http\Controllers\NewsController;
 use App\Http\Controllers\MijnCnController;
 use App\Http\Controllers\PageController;
@@ -32,7 +33,8 @@ Route::get('/awards', [AwardsController::class, 'index'])->name('awards');
 Route::get('/awards/finale', [AwardsController::class, 'finale'])->name('awards.finale');
 Route::get('/awards/hall-of-fame', [AwardsController::class, 'hallOfFame'])->name('awards.hall');
 Route::get('/awards/nominatie/{nomination}', [AwardsController::class, 'nomination'])->name('awards.nomination');
-Route::get('/mini-awards', [PageController::class, 'show'])->defaults('page', 'mini-awards')->name('mini.awards');
+Route::get('/mini-awards', [MiniAwardsController::class, 'index'])->name('mini.awards');
+Route::get('/mini-awards/archief', [MiniAwardsController::class, 'archive'])->name('mini.awards.archive');
 Route::get('/nieuws', [NewsController::class, 'index'])->name('nieuws');
 Route::get('/nieuws/{content:slug}', [NewsController::class, 'show'])->name('news.show');
 Route::get('/partners', [PageController::class, 'show'])->defaults('page', 'partners')->name('partners');
@@ -71,6 +73,7 @@ Route::middleware('auth')->group(function () {
 Route::prefix('staff')->name('staff.')->middleware(['auth', 'permission:staff.access'])->group(function () {
     Route::get('/dashboard', [StaffController::class, 'index'])->name('dashboard');
     Route::get('/awards', [AwardManagementController::class, 'index'])->name('awards');
+    Route::get('/mini-awards', [AwardManagementController::class, 'miniIndex'])->name('mini-awards');
     Route::patch('/awards/{edition}/fase', [AwardManagementController::class, 'updateEdition'])->name('awards.phase');
     Route::post('/awards/{edition}/rondes', [AwardManagementController::class, 'saveRound'])->name('awards.rounds.store');
     Route::post('/awards/{edition}/categorieen', [AwardManagementController::class, 'storeCategory'])->name('awards.categories.store');

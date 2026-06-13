@@ -275,6 +275,111 @@ class PlatformTest extends TestCase
             ->assertSee('Beste Opkomende Community');
     }
 
+    public function test_mini_awards_use_independent_categories_nominations_and_votes(): void
+    {
+        $submitter = User::factory()->create(['discord_id' => 'mini-submitter']);
+        $voter = User::factory()->create(['discord_id' => 'mini-voter']);
+        $normalEdition = AwardEdition::create([
+            'name' => 'CN Awards 2026',
+            'slug' => 'normal-independent-awards',
+            'type' => 'cn_awards',
+            'year' => 2026,
+            'status' => 'voting',
+        ]);
+        $miniEdition = AwardEdition::create([
+            'name' => 'Mini Awards Test',
+            'slug' => 'independent-mini-awards',
+            'type' => 'mini_awards',
+            'year' => 2027,
+            'status' => 'voting',
+        ]);
+        $normalCategory = AwardCategory::create([
+            'award_edition_id' => $normalEdition->id,
+            'name' => 'Normale Categorie',
+            'slug' => 'normale-categorie-independent',
+        ]);
+        $miniCategory = AwardCategory::create([
+            'award_edition_id' => $miniEdition->id,
+            'name' => 'Mini Categorie',
+            'slug' => 'mini-categorie-independent',
+            'jury_weight' => 0,
+            'public_weight' => 100,
+        ]);
+        $normalNomination = Nomination::create([
+            'award_category_id' => $normalCategory->id,
+            'user_id' => $submitter->id,
+            'nominee_name' => 'Normale Kandidaat',
+            'motivation' => 'Deze kandidaat hoort uitsluitend bij de normale Awards.',
+            'status' => 'approved',
+        ]);
+        $miniNomination = Nomination::create([
+            'award_category_id' => $miniCategory->id,
+            'user_id' => $submitter->id,
+            'nominee_name' => 'Mini Kandidaat',
+            'motivation' => 'Deze kandidaat hoort uitsluitend bij de Mini Awards.',
+            'status' => 'approved',
+        ]);
+        $miniRound = AwardRound::create([
+            'award_edition_id' => $miniEdition->id,
+            'name' => 'Mini stemronde',
+            'type' => 'public_vote',
+            'starts_at' => now()->subHour(),
+            'ends_at' => now()->addDay(),
+            'is_active' => true,
+        ]);
+
+        $this->get(route('mini.awards'))
+            ->assertOk()
+            ->assertSee('Mini Categorie')
+            ->assertSee('Mini Kandidaat')
+            ->assertDontSee('Normale Categorie')
+            ->assertDontSee('Normale Kandidaat');
+
+        $this->actingAs($voter)
+            ->post(route('awards.vote', $miniNomination), ['round_id' => $miniRound->id])
+            ->assertRedirect(route('mini.awards', ['categorie' => $miniCategory->slug]));
+
+        $this->assertDatabaseHas('votes', [
+            'nomination_id' => $miniNomination->id,
+            'round_id' => $miniRound->id,
+            'user_id' => $voter->id,
+        ]);
+        $this->assertDatabaseMissing('votes', ['nomination_id' => $normalNomination->id]);
+    }
+
+    public function test_owner_has_separate_mini_awards_management(): void
+    {
+        $owner = User::factory()->create(['role' => \App\Enums\UserRole::Owner]);
+        AwardEdition::create([
+            'name' => 'Normale Awards',
+            'slug' => 'normal-management-awards',
+            'type' => 'cn_awards',
+            'year' => 2026,
+            'status' => 'draft',
+        ]);
+        $miniEdition = AwardEdition::create([
+            'name' => 'Mini Beheer Editie',
+            'slug' => 'mini-management-awards',
+            'type' => 'mini_awards',
+            'year' => 2027,
+            'status' => 'nominations',
+        ]);
+        AwardCategory::create([
+            'award_edition_id' => $miniEdition->id,
+            'name' => 'Eigen Mini Categorie',
+            'slug' => 'eigen-mini-categorie',
+            'jury_weight' => 0,
+            'public_weight' => 100,
+        ]);
+
+        $this->actingAs($owner)
+            ->get(route('staff.mini-awards'))
+            ->assertOk()
+            ->assertSee('Mini Beheer Editie')
+            ->assertSee('Eigen Mini Categorie')
+            ->assertDontSee('Juryrapport toevoegen');
+    }
+
     public function test_owner_can_submit_a_jury_assessment(): void
     {
         $owner = User::factory()->create(['role' => \App\Enums\UserRole::Owner, 'discord_id' => 'owner']);

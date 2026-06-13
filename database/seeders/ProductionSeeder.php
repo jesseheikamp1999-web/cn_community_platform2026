@@ -51,6 +51,37 @@ class ProductionSeeder extends Seeder
             );
         }
 
+        $miniEdition = AwardEdition::firstOrCreate(
+            ['slug' => 'summer-mini-awards-2026'],
+            ['name' => 'Summer Mini Awards 2026', 'type' => 'mini_awards', 'year' => 2026, 'status' => 'nominations']
+        );
+        $miniSettings = $miniEdition->settings ?? [];
+        $miniSettings['nominations']['max_per_user'] = 1;
+        $miniSettings['voting']['allow_change'] = true;
+        $miniSettings['finale']['finalists_count'] = 3;
+        $miniEdition->update(['settings' => $miniSettings]);
+
+        foreach ([
+            ['Meest Behulpzame Lid', 'Voor iemand die zonder aarzelen klaarstaat voor anderen.'],
+            ['Leukste Communitymoment', 'Voor het moment waar de community nog steeds over praat.'],
+            ['Beste Inside Joke', 'Voor de grap die inmiddels bij CN hoort.'],
+            ['Creatiefste Bijdrage', 'Voor een originele creatie, idee of communitybijdrage.'],
+            ['Positieve Verrassing', 'Voor iemand of iets dat deze ronde onverwacht indruk maakte.'],
+            ['Beste Eventmoment', 'Voor het mooiste, grappigste of spannendste moment uit een CN-event.'],
+        ] as $index => $category) {
+            AwardCategory::updateOrCreate(
+                ['award_edition_id' => $miniEdition->id, 'slug' => Str::slug($category[0])],
+                [
+                    'name' => $category[0],
+                    'description' => $category[1],
+                    'sort_order' => ($index + 1) * 10,
+                    'jury_weight' => 0,
+                    'public_weight' => 100,
+                    'is_active' => true,
+                ]
+            );
+        }
+
         app(Academy2026Service::class)->sync();
         app(\App\Services\NomiKnowledgeService::class)->refresh();
 

@@ -1,10 +1,14 @@
 @extends('layouts.dashboard')
-@section('title', 'Awards beheer - MijnCN')
+@section('title', ($isMiniAwards ? 'Mini Awards' : 'Awards').' beheer - MijnCN')
 
 @section('content')
 <div class="dashboard-shell module-shell awards-admin">
     <header class="module-header">
-        <div><span class="dashboard-kicker">STAFF &middot; AWARDS SHOW</span><h1>{{ $edition->name }}</h1><p>Controlekamer voor nominaties, community-stemmen, juryrapporten, finalisten en reveal.</p></div>
+        <div>
+            <span class="dashboard-kicker">STAFF &middot; {{ $isMiniAwards ? 'MINI AWARDS' : 'AWARDS SHOW' }}</span>
+            <h1>{{ $edition->name }}</h1>
+            <p>{{ $isMiniAwards ? 'Zelfstandige korte communityrondes met eigen categorieën, nominaties en stemmen.' : 'Controlekamer voor nominaties, community-stemmen, juryrapporten, finalisten en reveal.' }}</p>
+        </div>
         <span class="status status-approved">{{ ucfirst($edition->status) }}</span>
     </header>
 
@@ -12,22 +16,22 @@
         <article><span>Nominaties</span><strong>{{ $stats['nominations'] }}</strong><small>{{ $stats['unique_nominators'] }} unieke nominators</small></article>
         <article><span>Stemmen</span><strong>{{ $stats['votes'] }}</strong><small>geldige actieve stemmen</small></article>
         <article><span>Finalisten</span><strong>{{ $stats['finalists'] }}</strong><small>top 5 per categorie</small></article>
-        <article><span>Juryleden</span><strong>{{ $stats['jury_members'] }}</strong><small>gekoppelde panelleden</small></article>
+        <article><span>{{ $isMiniAwards ? 'Categorieën' : 'Juryleden' }}</span><strong>{{ $isMiniAwards ? $edition->categories->count() : $stats['jury_members'] }}</strong><small>{{ $isMiniAwards ? 'eigen mini-categorieën' : 'gekoppelde panelleden' }}</small></article>
     </section>
 
     @if(auth()->user()->hasPermission('awards.manage'))
         <div class="awards-admin-grid">
-            <section class="module-card">
+            @unless($isMiniAwards)<section class="module-card">
                 <div class="module-card-heading"><div><span>INSTELLINGEN</span><h2>Awards status</h2></div></div>
                 <form class="module-form" method="post" action="{{ route('staff.awards.phase', $edition) }}">@csrf @method('PATCH')
-                    <label>Huidige fase<select name="status">@foreach(['draft','nominations','voting','jury','finale','published','archived'] as $status)<option value="{{ $status }}" @selected($edition->status === $status)>{{ ucfirst($status) }}</option>@endforeach</select></label>
+                    <label>Huidige fase<select name="status">@foreach($isMiniAwards ? ['draft','nominations','voting','finale','published','archived'] : ['draft','nominations','voting','jury','finale','published','archived'] as $status)<option value="{{ $status }}" @selected($edition->status === $status)>{{ ucfirst($status) }}</option>@endforeach</select></label>
                     <button class="button button-primary">Fase opslaan</button>
                 </form>
                 <div class="admin-action-row">
                     <form method="post" action="{{ route('staff.awards.winners.generate', $edition) }}">@csrf<button class="button button-secondary">Top 5 finalisten berekenen</button></form>
                     <form method="post" action="{{ route('staff.awards.winners.publish', $edition) }}">@csrf<button class="button button-primary">Hall of Fame publiceren</button></form>
                 </div>
-            </section>
+            </section>@endunless
             <section class="module-card">
                 <div class="module-card-heading"><div><span>REVEAL</span><h2>Live winnaar onthullen</h2></div></div>
                 <p class="award-help">Reveal per positie, van 5 naar 1. De eerste plaats wordt pas winnaar zodra positie 1 wordt onthuld.</p>
@@ -50,8 +54,8 @@
                 <div class="category-form-grid">
                     <label>Naam<input name="name" required maxlength="120" placeholder="Bijvoorbeeld Beste Community"></label>
                     <label>Volgorde<input name="sort_order" type="number" min="0" max="999" value="{{ $edition->categories->max('sort_order') + 10 }}" required></label>
-                    <label>Publiek gewicht<input name="public_weight" type="number" min="0" max="100" step="0.01" value="60" required></label>
-                    <label>Jurygewicht<input name="jury_weight" type="number" min="0" max="100" step="0.01" value="40" required></label>
+                    <label>Publiek gewicht<input name="public_weight" type="number" min="0" max="100" step="0.01" value="{{ $isMiniAwards ? 100 : 60 }}" required></label>
+                    <label>Jurygewicht<input name="jury_weight" type="number" min="0" max="100" step="0.01" value="{{ $isMiniAwards ? 0 : 40 }}" required></label>
                     <label class="wide">Omschrijving<textarea name="description" rows="2" maxlength="1000" placeholder="Korte uitleg voor bezoekers en nominators"></textarea></label>
                     <label>Icoon<input name="icon" maxlength="80" placeholder="Optioneel"></label>
                     <label class="check-label"><input type="checkbox" name="is_active" value="1" checked> Direct actief</label>
@@ -118,7 +122,7 @@
         </div>
     </section>
 
-    @if(auth()->user()->hasPermission('jury.score'))
+    @if(!$isMiniAwards && auth()->user()->hasPermission('jury.score'))
         <section class="module-card module-section">
             <div class="module-card-heading"><div><span>JURY PANEL</span><h2>Goedgekeurde nominaties beoordelen</h2></div><strong>{{ $juryNominations->count() }} kandidaten</strong></div>
             <div class="jury-candidate-list">

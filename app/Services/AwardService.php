@@ -35,7 +35,8 @@ class AwardService
         if (!$nominationRoundOpen) {
             throw ValidationException::withMessages(['nomination' => 'De nominatieronde is momenteel gesloten.']);
         }
-        $maxNominations = (int) ($category->edition->settings['nominations']['max_per_user'] ?? 5);
+        $defaultLimit = $category->edition->type === 'mini_awards' ? 1 : 5;
+        $maxNominations = (int) ($category->edition->settings['nominations']['max_per_user'] ?? $defaultLimit);
         $userNominations = $category->nominations()
             ->where('user_id', $user->id)
             ->whereNull('canonical_nomination_id')

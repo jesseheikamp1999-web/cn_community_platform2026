@@ -29,8 +29,12 @@ class AwardActionController extends Controller
         $data = $request->validate(['round_id' => ['required', 'integer', 'exists:award_rounds,id']]);
         $awards->vote($request->user(), $nomination, $data['round_id'], $request);
 
+        $route = $nomination->category->edition->type === 'mini_awards'
+            ? 'mini.awards'
+            : 'awards';
+
         return redirect()
-            ->route('awards', ['categorie' => $nomination->category->slug])
+            ->route($route, ['categorie' => $nomination->category->slug])
             ->with('success', 'Je stem is veilig opgeslagen.');
     }
 }

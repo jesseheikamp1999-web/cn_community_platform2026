@@ -22,9 +22,24 @@ class AwardManagementController extends Controller
 {
     public function index(Request $request): View
     {
-        abort_unless($request->user()->hasPermission('awards.review') || $request->user()->hasPermission('jury.score'), 403);
+        return $this->managementView($request, 'cn_awards');
+    }
 
-        $edition = AwardEdition::where('type', 'cn_awards')
+    public function miniIndex(Request $request): View
+    {
+        return $this->managementView($request, 'mini_awards');
+    }
+
+    private function managementView(Request $request, string $type): View
+    {
+        abort_unless(
+            $request->user()->hasPermission('awards.review')
+            || $request->user()->hasPermission('awards.manage')
+            || ($type === 'cn_awards' && $request->user()->hasPermission('jury.score')),
+            403
+        );
+
+        $edition = AwardEdition::where('type', $type)
             ->with([
                 'rounds' => fn ($query) => $query->orderBy('starts_at'),
                 'categories' => fn ($query) => $query->withCount('nominations')->orderBy('sort_order')->orderBy('name'),
@@ -55,7 +70,17 @@ class AwardManagementController extends Controller
             ->orderByDesc('award_winners.position')
             ->get();
 
-        return view('staff.awards', compact('edition', 'nominations', 'juryNominations', 'myScores', 'stats', 'winners'));
+        $isMiniAwards = $type === 'mini_awards';
+
+        return view('staff.awards', compact(
+            'edition',
+            'nominations',
+            'juryNominations',
+            'myScores',
+            'stats',
+            'winners',
+            'isMiniAwards'
+        ));
     }
 
     public function updateEdition(Request $request, AwardEdition $edition): RedirectResponse

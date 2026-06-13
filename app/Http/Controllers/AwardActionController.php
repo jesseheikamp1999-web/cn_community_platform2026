@@ -29,6 +29,8 @@ class AwardActionController extends Controller
         $data = $request->validate(['round_id' => ['required', 'integer', 'exists:award_rounds,id']]);
         $awards->vote($request->user(), $nomination, $data['round_id'], $request);
 
-        return back()->with('success', 'Je stem is veilig opgeslagen.');
+        return redirect()
+            ->route('awards', ['categorie' => $nomination->category->slug])
+            ->with('success', 'Je stem is veilig opgeslagen.');
     }
 }

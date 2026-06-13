@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Staff;
 
 use App\Http\Controllers\Controller;
+use App\Models\AwardCategory;
 use App\Models\AwardEdition;
 use App\Models\AwardRound;
 use App\Models\JuryScore;
@@ -12,6 +13,9 @@ use App\Services\PublishingService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class AwardManagementController extends Controller
@@ -21,7 +25,10 @@ class AwardManagementController extends Controller
         abort_unless($request->user()->hasPermission('awards.review') || $request->user()->hasPermission('jury.score'), 403);
 
         $edition = AwardEdition::where('type', 'cn_awards')
-            ->with(['rounds' => fn ($query) => $query->orderBy('starts_at'), 'categories' => fn ($query) => $query->orderBy('sort_order')])
+            ->with([
+                'rounds' => fn ($query) => $query->orderBy('starts_at'),
+                'categories' => fn ($query) => $query->withCount('nominations')->orderBy('sort_order')->orderBy('name'),
+            ])
             ->latest('year')
             ->firstOrFail();
         $allNominations = Nomination::with(['category', 'user', 'juryScores'])
@@ -74,6 +81,42 @@ class AwardManagementController extends Controller
         $edition->rounds()->updateOrCreate(['type' => $data['type']], $data);
 
         return back()->with('success', 'De ronde is opgeslagen.');
+    }
+
+    public function storeCategory(Request $request, AwardEdition $edition): RedirectResponse
+    {
+        abort_unless($request->user()->hasPermission('awards.manage'), 403);
+        $data = $this->validateCategory($request, $edition);
+        $data['slug'] = $this->uniqueCategorySlug($edition, $data['name']);
+        $data['is_active'] = $request->boolean('is_active');
+        $edition->categories()->create($data);
+
+        return back()->with('success', 'Awards-categorie toegevoegd.');
+    }
+
+    public function updateCategory(Request $request, AwardCategory $category): RedirectResponse
+    {
+        abort_unless($request->user()->hasPermission('awards.manage'), 403);
+        $data = $this->validateCategory($request, $category->edition, $category);
+        $data['slug'] = $this->uniqueCategorySlug($category->edition, $data['name'], $category);
+        $data['is_active'] = $request->boolean('is_active');
+        $category->update($data);
+
+        return back()->with('success', 'Awards-categorie bijgewerkt.');
+    }
+
+    public function destroyCategory(Request $request, AwardCategory $category): RedirectResponse
+    {
+        abort_unless($request->user()->hasPermission('awards.manage'), 403);
+        if ($category->nominations()->exists()) {
+            return back()->withErrors([
+                'category' => 'Deze categorie bevat nominaties en kan daarom alleen worden gedeactiveerd.',
+            ]);
+        }
+
+        $category->delete();
+
+        return back()->with('success', 'Awards-categorie verwijderd.');
     }
 
     public function score(Request $request, Nomination $nomination, JuryService $jury): RedirectResponse
@@ -172,5 +215,57 @@ class AwardManagementController extends Controller
         $edition->update(['status' => 'published']);
 
         return back()->with('success', 'De winnaars zijn gepubliceerd.');
+    }
+
+    private function validateCategory(
+        Request $request,
+        AwardEdition $edition,
+        ?AwardCategory $category = null
+    ): array {
+        $data = $request->validate([
+            'name' => [
+                'required',
+                'string',
+                'max:120',
+                Rule::unique('award_categories', 'name')
+                    ->where('award_edition_id', $edition->id)
+                    ->ignore($category?->id),
+            ],
+            'description' => ['nullable', 'string', 'max:1000'],
+            'icon' => ['nullable', 'string', 'max:80'],
+            'sort_order' => ['required', 'integer', 'min:0', 'max:999'],
+            'jury_weight' => ['required', 'numeric', 'min:0', 'max:100'],
+            'public_weight' => ['required', 'numeric', 'min:0', 'max:100'],
+            'is_active' => ['nullable', 'boolean'],
+        ]);
+
+        if (abs(((float) $data['jury_weight'] + (float) $data['public_weight']) - 100) > 0.01) {
+            throw ValidationException::withMessages([
+                'public_weight' => 'Publieksgewicht en jurygewicht moeten samen precies 100% zijn.',
+            ]);
+        }
+
+        return $data;
+    }
+
+    private function uniqueCategorySlug(
+        AwardEdition $edition,
+        string $name,
+        ?AwardCategory $category = null
+    ): string {
+        $base = Str::slug($name) ?: 'categorie';
+        $slug = $base;
+        $suffix = 2;
+
+        while (
+            $edition->categories()
+                ->where('slug', $slug)
+                ->when($category, fn ($query) => $query->whereKeyNot($category->id))
+                ->exists()
+        ) {
+            $slug = $base.'-'.$suffix++;
+        }
+
+        return $slug;
     }
 }

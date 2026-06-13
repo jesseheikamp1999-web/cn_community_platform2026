@@ -103,6 +103,9 @@ class AwardService
         if (!in_array($nomination->status, ['approved', 'finalist'], true)) {
             throw ValidationException::withMessages(['vote' => 'Op deze nominatie kan niet worden gestemd.']);
         }
+        if (!$nomination->category->is_active) {
+            throw ValidationException::withMessages(['vote' => 'Deze categorie is niet actief.']);
+        }
         $round = AwardRound::find($roundId);
         if (
             !$round

@@ -10,6 +10,16 @@ class AwardCategory extends Model
 {
     protected $fillable = ['award_edition_id', 'name', 'slug', 'description', 'icon', 'sort_order', 'jury_weight', 'public_weight', 'is_active'];
 
+    protected function casts(): array
+    {
+        return [
+            'sort_order' => 'integer',
+            'jury_weight' => 'decimal:2',
+            'public_weight' => 'decimal:2',
+            'is_active' => 'boolean',
+        ];
+    }
+
     public function edition(): BelongsTo
     {
         return $this->belongsTo(AwardEdition::class, 'award_edition_id');

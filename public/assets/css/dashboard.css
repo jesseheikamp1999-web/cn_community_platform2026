@@ -1857,6 +1857,85 @@
     margin-top: 18px;
 }
 
+.award-category-manager {
+    margin-top: 20px;
+}
+
+.category-create-form {
+    margin: 0 24px 22px;
+    padding: 20px;
+    border: 1px dashed #d9dce2;
+    border-radius: 14px;
+    background: #fafafa;
+}
+
+.category-form-grid {
+    display: grid;
+    grid-template-columns: minmax(180px, 1.5fr) repeat(3, minmax(110px, .65fr));
+    gap: 13px;
+}
+
+.category-form-grid .wide {
+    grid-column: span 3;
+}
+
+.category-form-grid .check-label {
+    display: flex;
+    align-items: center;
+    align-self: end;
+    min-height: 42px;
+    gap: 9px;
+}
+
+.category-form-grid .check-label input {
+    width: 17px;
+    height: 17px;
+}
+
+.category-admin-list {
+    border-top: 1px solid #eceef1;
+}
+
+.category-admin-list > article {
+    position: relative;
+    padding: 22px 24px;
+    border-bottom: 1px solid #eceef1;
+}
+
+.category-edit-form {
+    padding-right: 84px;
+}
+
+.category-edit-form footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-top: 14px;
+}
+
+.category-edit-form footer small {
+    color: #8b8f97;
+    font-size: 9px;
+}
+
+.category-delete {
+    position: absolute;
+    right: 24px;
+    top: 24px;
+    padding: 7px 0;
+    border: 0;
+    background: transparent;
+    color: #b54a50;
+    font-size: 9px;
+    font-weight: 750;
+    cursor: pointer;
+}
+
+.category-delete:hover {
+    color: #df1822;
+}
+
 .round-list {
     margin-top: 20px;
     border-top: 1px solid #eceef1;
@@ -2160,6 +2239,14 @@
         grid-template-columns: 1fr 1fr;
     }
 
+    .category-form-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .category-form-grid .wide {
+        grid-column: 1 / -1;
+    }
+
     .award-command-grid {
         grid-template-columns: 1fr 1fr;
     }
@@ -2167,8 +2254,27 @@
 
 @media (max-width: 620px) {
     .awards-admin-grid,
-    .jury-score-grid {
+    .jury-score-grid,
+    .category-form-grid {
         grid-template-columns: 1fr;
+    }
+
+    .category-form-grid .wide {
+        grid-column: auto;
+    }
+
+    .category-edit-form {
+        padding-right: 0;
+    }
+
+    .category-delete {
+        position: static;
+        margin-top: 8px;
+    }
+
+    .category-edit-form footer {
+        align-items: stretch;
+        flex-direction: column;
     }
 
     .jury-report-grid {

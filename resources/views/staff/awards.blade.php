@@ -38,6 +38,56 @@
                 </div>
             </section>
         </div>
+
+        <section class="module-card module-section award-category-manager">
+            <div class="module-card-heading">
+                <div><span>CATEGORIEËN</span><h2>Categorieën beheren</h2></div>
+                <strong>{{ $edition->categories->count() }} categorieën</strong>
+            </div>
+
+            <form class="module-form category-create-form" method="post" action="{{ route('staff.awards.categories.store', $edition) }}">
+                @csrf
+                <div class="category-form-grid">
+                    <label>Naam<input name="name" required maxlength="120" placeholder="Bijvoorbeeld Beste Community"></label>
+                    <label>Volgorde<input name="sort_order" type="number" min="0" max="999" value="{{ $edition->categories->max('sort_order') + 10 }}" required></label>
+                    <label>Publiek gewicht<input name="public_weight" type="number" min="0" max="100" step="0.01" value="60" required></label>
+                    <label>Jurygewicht<input name="jury_weight" type="number" min="0" max="100" step="0.01" value="40" required></label>
+                    <label class="wide">Omschrijving<textarea name="description" rows="2" maxlength="1000" placeholder="Korte uitleg voor bezoekers en nominators"></textarea></label>
+                    <label>Icoon<input name="icon" maxlength="80" placeholder="Optioneel"></label>
+                    <label class="check-label"><input type="checkbox" name="is_active" value="1" checked> Direct actief</label>
+                </div>
+                <button class="button button-primary">Categorie toevoegen</button>
+            </form>
+
+            <div class="category-admin-list">
+                @foreach($edition->categories as $category)
+                    <article>
+                        <form class="module-form category-edit-form" method="post" action="{{ route('staff.awards.categories.update', $category) }}">
+                            @csrf
+                            @method('PUT')
+                            <div class="category-form-grid">
+                                <label>Naam<input name="name" value="{{ $category->name }}" required maxlength="120"></label>
+                                <label>Volgorde<input name="sort_order" type="number" min="0" max="999" value="{{ $category->sort_order }}" required></label>
+                                <label>Publiek gewicht<input name="public_weight" type="number" min="0" max="100" step="0.01" value="{{ $category->public_weight }}" required></label>
+                                <label>Jurygewicht<input name="jury_weight" type="number" min="0" max="100" step="0.01" value="{{ $category->jury_weight }}" required></label>
+                                <label class="wide">Omschrijving<textarea name="description" rows="2" maxlength="1000">{{ $category->description }}</textarea></label>
+                                <label>Icoon<input name="icon" value="{{ $category->icon }}" maxlength="80"></label>
+                                <label class="check-label"><input type="checkbox" name="is_active" value="1" @checked($category->is_active)> Actief</label>
+                            </div>
+                            <footer>
+                                <small>{{ $category->nominations_count }} nominaties · slug: {{ $category->slug }}</small>
+                                <button class="button button-secondary button-small">Wijzigingen opslaan</button>
+                            </footer>
+                        </form>
+                        <form method="post" action="{{ route('staff.awards.categories.destroy', $category) }}" onsubmit="return confirm('Categorie definitief verwijderen? Dit kan alleen zonder nominaties.')">
+                            @csrf
+                            @method('DELETE')
+                            <button class="category-delete" aria-label="{{ $category->name }} verwijderen">Verwijderen</button>
+                        </form>
+                    </article>
+                @endforeach
+            </div>
+        </section>
     @endif
 
     <section class="module-card module-section">

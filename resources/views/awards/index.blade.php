@@ -61,14 +61,30 @@
             @endforeach
         </div>
 
-        <nav class="award-category-nav">
-            @foreach($edition->categories as $category)<a href="#categorie-{{ $category->id }}">{{ $category->name }}</a>@endforeach
-        </nav>
+        @if($selectedCategory)
+            <section class="award-category-picker">
+                <div>
+                    <span>CATEGORIE</span>
+                    <strong>Kies welke nominaties je wilt bekijken</strong>
+                </div>
+                <form method="get" action="{{ route('awards') }}">
+                    <label for="award-category-select" class="sr-only">Awards-categorie</label>
+                    <select id="award-category-select" name="categorie" data-category-select>
+                        @foreach($edition->categories as $category)
+                            <option value="{{ $category->slug }}" @selected($selectedCategory->is($category))>
+                                {{ str_pad((string) $loop->iteration, 2, '0', STR_PAD_LEFT) }} · {{ $category->name }} ({{ $category->nominations_count }})
+                            </option>
+                        @endforeach
+                    </select>
+                    <button class="button button-secondary button-small">Bekijken</button>
+                </form>
+            </section>
 
-        @foreach($edition->categories as $category)
-            <section class="award-category-section" id="categorie-{{ $category->id }}">
+            @php($category = $selectedCategory)
+            @php($categoryNumber = $edition->categories->search(fn ($item) => $item->is($category)) + 1)
+            <section class="award-category-section compact" id="categorie-{{ $category->id }}">
                 <header>
-                    <div><span>{{ str_pad((string) $loop->iteration, 2, '0', STR_PAD_LEFT) }}</span><h2>{{ $category->name }}</h2><p>{{ $category->description }}</p></div>
+                    <div><span>{{ str_pad((string) $categoryNumber, 2, '0', STR_PAD_LEFT) }}</span><h2>{{ $category->name }}</h2><p>{{ $category->description }}</p></div>
                     <strong>{{ $category->nominations->count() }} kandidaten</strong>
                 </header>
 
@@ -90,7 +106,14 @@
                                 <small>{{ $nomination->votes_count }} geldige stemmen</small>
                                 @auth
                                     @if($activeVoteRound && in_array($nomination->status, ['approved', 'finalist'], true))
-                                        <form method="post" action="{{ route('awards.vote', $nomination) }}">@csrf<input type="hidden" name="round_id" value="{{ $activeVoteRound->id }}"><button class="button button-small {{ in_array($nomination->id, $userVotes, true) ? 'button-secondary' : 'button-primary' }}">{{ in_array($nomination->id, $userVotes, true) ? 'Jouw stem' : (count($userVotes) ? 'Stem aanpassen' : 'Stemmen') }}</button></form>
+                                        <form method="post" action="{{ route('awards.vote', $nomination) }}">
+                                            @csrf
+                                            <input type="hidden" name="round_id" value="{{ $activeVoteRound->id }}">
+                                            <input type="hidden" name="categorie" value="{{ $category->slug }}">
+                                            <button class="button button-small {{ $currentVoteId === $nomination->id ? 'button-secondary' : 'button-primary' }}">
+                                                {{ $currentVoteId === $nomination->id ? 'Jouw stem' : ($currentVoteId ? 'Stem aanpassen' : 'Stemmen') }}
+                                            </button>
+                                        </form>
                                     @endif
                                 @else
                                     @if($activeVoteRound)<a class="button button-primary button-small" href="{{ route('discord.login') }}">Login om te stemmen</a>@endif
@@ -118,7 +141,9 @@
                     @endauth
                 @endif
             </section>
-        @endforeach
+        @else
+            <div class="award-empty">Er zijn nog geen actieve categorieën voor deze editie.</div>
+        @endif
     @endif
 </section>
 @push('scripts')
@@ -141,6 +166,10 @@
         };
         updateCountdown();
         window.setInterval(updateCountdown, 1000);
+    });
+
+    document.querySelectorAll('[data-category-select]').forEach((select) => {
+        select.addEventListener('change', () => select.form.submit());
     });
 </script>
 @endpush

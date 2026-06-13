@@ -18,20 +18,31 @@ class AwardsController extends Controller
                 'categories' => fn ($query) => $query
                     ->where('is_active', true)
                     ->orderBy('sort_order')
-                    ->with(['nominations' => fn ($nominations) => $nominations
-                        ->whereIn('status', ['approved', 'finalist', 'winner'])
-                        ->withCount(['votes' => fn ($votes) => $votes->where('is_valid', true)->whereNull('superseded_at')])
-                        ->orderByDesc('votes_count')
-                        ->orderBy('nominee_name')]),
+                    ->orderBy('name')
+                    ->withCount(['nominations' => fn ($nominations) => $nominations
+                        ->whereIn('status', ['approved', 'finalist', 'winner'])]),
             ])
             ->latest('year')
             ->first();
 
+        $selectedCategory = $edition?->categories->firstWhere('slug', (string) $request->query('categorie'))
+            ?? $edition?->categories->first();
+        $selectedCategory?->load(['nominations' => fn ($nominations) => $nominations
+            ->whereIn('status', ['approved', 'finalist', 'winner'])
+            ->withCount(['votes' => fn ($votes) => $votes->where('is_valid', true)->whereNull('superseded_at')])
+            ->orderByDesc('votes_count')
+            ->orderBy('nominee_name')]);
+
         $activeVoteRound = $edition?->rounds
             ->first(fn ($round) => $round->type === 'public_vote' && $round->isOpen());
-        $userVotes = $request->user() && $activeVoteRound
-            ? $request->user()->votes()->where('round_id', $activeVoteRound->id)->whereNull('superseded_at')->pluck('nomination_id')->all()
-            : [];
+        $currentVoteId = null;
+        if ($request->user() && $activeVoteRound && $selectedCategory) {
+            $currentVoteId = $request->user()->votes()
+                ->where('round_id', $activeVoteRound->id)
+                ->whereNull('superseded_at')
+                ->whereHas('nomination', fn ($query) => $query->where('award_category_id', $selectedCategory->id))
+                ->value('nomination_id');
+        }
         $currentRound = $edition?->rounds->first(fn ($round) => $round->starts_at->lte(now()) && $round->ends_at->gte(now()));
         $nextRound = $edition?->rounds->first(fn ($round) => $round->starts_at->isFuture());
         $phaseDeadline = $currentRound?->ends_at
@@ -47,8 +58,9 @@ class AwardsController extends Controller
 
         return view('awards.index', compact(
             'edition',
+            'selectedCategory',
             'activeVoteRound',
-            'userVotes',
+            'currentVoteId',
             'currentRound',
             'nextRound',
             'phaseDeadline',

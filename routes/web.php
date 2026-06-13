@@ -73,6 +73,9 @@ Route::prefix('staff')->name('staff.')->middleware(['auth', 'permission:staff.ac
     Route::get('/awards', [AwardManagementController::class, 'index'])->name('awards');
     Route::patch('/awards/{edition}/fase', [AwardManagementController::class, 'updateEdition'])->name('awards.phase');
     Route::post('/awards/{edition}/rondes', [AwardManagementController::class, 'saveRound'])->name('awards.rounds.store');
+    Route::post('/awards/{edition}/categorieen', [AwardManagementController::class, 'storeCategory'])->name('awards.categories.store');
+    Route::put('/awards/categorieen/{category}', [AwardManagementController::class, 'updateCategory'])->name('awards.categories.update');
+    Route::delete('/awards/categorieen/{category}', [AwardManagementController::class, 'destroyCategory'])->name('awards.categories.destroy');
     Route::post('/awards/nominaties/{nomination}/jury', [AwardManagementController::class, 'score'])->name('awards.jury.score');
     Route::post('/awards/{edition}/winnaars-genereren', [AwardManagementController::class, 'generateWinners'])->name('awards.winners.generate');
     Route::post('/awards/{edition}/publiceren', [AwardManagementController::class, 'publishWinners'])->name('awards.winners.publish');

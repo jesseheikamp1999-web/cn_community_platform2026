@@ -166,6 +166,115 @@ class PlatformTest extends TestCase
         ]);
     }
 
+    public function test_awards_page_shows_one_selected_category_and_vote_state_per_category(): void
+    {
+        $submitter = User::factory()->create(['discord_id' => 'awards-submitter']);
+        $voter = User::factory()->create(['discord_id' => 'awards-voter']);
+        $edition = AwardEdition::create([
+            'name' => 'CN Awards 2026',
+            'slug' => 'awards-category-picker',
+            'type' => 'cn_awards',
+            'year' => 2026,
+            'status' => 'voting',
+        ]);
+        $round = AwardRound::create([
+            'award_edition_id' => $edition->id,
+            'name' => 'Publieksstemmen',
+            'type' => 'public_vote',
+            'starts_at' => now()->subDay(),
+            'ends_at' => now()->addDay(),
+            'is_active' => true,
+        ]);
+        $firstCategory = AwardCategory::create([
+            'award_edition_id' => $edition->id,
+            'name' => 'Eerste Categorie',
+            'slug' => 'eerste-categorie',
+            'sort_order' => 10,
+        ]);
+        $secondCategory = AwardCategory::create([
+            'award_edition_id' => $edition->id,
+            'name' => 'Tweede Categorie',
+            'slug' => 'tweede-categorie',
+            'sort_order' => 20,
+        ]);
+        $firstNomination = Nomination::create([
+            'award_category_id' => $firstCategory->id,
+            'user_id' => $submitter->id,
+            'nominee_name' => 'Alleen Eerste Kandidaat',
+            'motivation' => 'Een uitgebreide motivatie voor de eerste kandidaat.',
+            'status' => 'approved',
+        ]);
+        Nomination::create([
+            'award_category_id' => $secondCategory->id,
+            'user_id' => $submitter->id,
+            'nominee_name' => 'Alleen Tweede Kandidaat',
+            'motivation' => 'Een uitgebreide motivatie voor de tweede kandidaat.',
+            'status' => 'approved',
+        ]);
+
+        $this->actingAs($voter)->post(route('awards.vote', $firstNomination), ['round_id' => $round->id])
+            ->assertRedirect(route('awards', ['categorie' => $firstCategory->slug]));
+
+        $this->actingAs($voter)
+            ->get(route('awards', ['categorie' => $firstCategory->slug]))
+            ->assertOk()
+            ->assertSee('Alleen Eerste Kandidaat')
+            ->assertDontSee('Alleen Tweede Kandidaat')
+            ->assertSee('Jouw stem');
+
+        $this->actingAs($voter)
+            ->get(route('awards', ['categorie' => $secondCategory->slug]))
+            ->assertOk()
+            ->assertSee('Alleen Tweede Kandidaat')
+            ->assertDontSee('Alleen Eerste Kandidaat')
+            ->assertDontSee('Stem aanpassen');
+    }
+
+    public function test_owner_can_manage_awards_categories_from_mijncn(): void
+    {
+        $owner = User::factory()->create(['role' => \App\Enums\UserRole::Owner]);
+        $edition = AwardEdition::create([
+            'name' => 'CN Awards 2026',
+            'slug' => 'awards-category-management',
+            'type' => 'cn_awards',
+            'year' => 2026,
+            'status' => 'draft',
+        ]);
+
+        $this->actingAs($owner)->post(route('staff.awards.categories.store', $edition), [
+            'name' => 'Beste Nieuwkomer',
+            'description' => 'Voor een sterke nieuwe community.',
+            'sort_order' => 30,
+            'public_weight' => 60,
+            'jury_weight' => 40,
+            'is_active' => 1,
+        ])->assertSessionHasNoErrors();
+
+        $category = AwardCategory::where('award_edition_id', $edition->id)
+            ->where('name', 'Beste Nieuwkomer')
+            ->firstOrFail();
+
+        $this->actingAs($owner)->put(route('staff.awards.categories.update', $category), [
+            'name' => 'Beste Opkomende Community',
+            'description' => 'Aangepaste omschrijving.',
+            'sort_order' => 15,
+            'public_weight' => 70,
+            'jury_weight' => 30,
+        ])->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('award_categories', [
+            'id' => $category->id,
+            'name' => 'Beste Opkomende Community',
+            'slug' => 'beste-opkomende-community',
+            'sort_order' => 15,
+            'is_active' => false,
+        ]);
+        $this->actingAs($owner)->get(route('staff.awards'))
+            ->assertOk()
+            ->assertSee('Categorieën beheren')
+            ->assertSee('Beste Opkomende Community');
+    }
+
     public function test_owner_can_submit_a_jury_assessment(): void
     {
         $owner = User::factory()->create(['role' => \App\Enums\UserRole::Owner, 'discord_id' => 'owner']);

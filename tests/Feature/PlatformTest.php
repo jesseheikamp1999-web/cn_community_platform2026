@@ -1478,6 +1478,109 @@ class PlatformTest extends TestCase
         Storage::disk('public')->assertExists($attachment->path);
     }
 
+    public function test_staff_messenger_keeps_the_composer_available_with_a_long_chat_and_attachment(): void
+    {
+        Storage::fake('public');
+        $sender = User::factory()->create(['role' => \App\Enums\UserRole::Helper]);
+        $recipient = User::factory()->create(['role' => \App\Enums\UserRole::Moderator]);
+        $conversation = ChatConversation::create([
+            'type' => 'direct',
+            'created_by' => $sender->id,
+        ]);
+        $conversation->participants()->attach([$sender->id, $recipient->id]);
+
+        foreach (range(1, 40) as $number) {
+            ChatMessage::create([
+                'conversation_id' => $conversation->id,
+                'sender_id' => $number % 2 ? $sender->id : $recipient->id,
+                'body' => 'Testbericht '.$number,
+            ]);
+        }
+
+        $lastMessage = $conversation->messages()->latest('id')->firstOrFail();
+        $lastMessage->attachments()->create([
+            'disk' => 'public',
+            'path' => 'chat/test/voorbeeld.png',
+            'original_name' => 'voorbeeld.png',
+            'mime_type' => 'image/png',
+            'size' => 1024,
+        ]);
+
+        $this->actingAs($sender)
+            ->get(route('mijncn.chat', ['gesprek' => $conversation->id]))
+            ->assertOk()
+            ->assertSee('data-chat-messages', false)
+            ->assertSee('data-chat-form', false)
+            ->assertSee('data-chat-file', false)
+            ->assertSee('voorbeeld.png');
+    }
+
+    public function test_group_admin_can_manage_and_use_advanced_message_actions(): void
+    {
+        $owner = User::factory()->create(['role' => \App\Enums\UserRole::Owner]);
+        $helper = User::factory()->create(['role' => \App\Enums\UserRole::Helper]);
+        $conversation = ChatConversation::create([
+            'name' => 'Projectgroep',
+            'type' => 'staff',
+            'created_by' => $owner->id,
+        ]);
+        $conversation->participants()->attach($owner->id, ['is_admin' => true]);
+        $conversation->participants()->attach($helper->id);
+
+        $original = ChatMessage::create([
+            'conversation_id' => $conversation->id,
+            'sender_id' => $helper->id,
+            'body' => 'Kunnen we dit morgen uitvoeren?',
+        ]);
+        $reply = $this->actingAs($owner)->postJson(route('chat.api.send'), [
+            'conversation_id' => $conversation->id,
+            'reply_to_id' => $original->id,
+            'body' => 'Ja, ik zet dit direct vast.',
+            'is_announcement' => true,
+            'requires_ack' => true,
+        ])->assertCreated()
+            ->assertJsonPath('message.reply.id', $original->id)
+            ->assertJsonPath('message.announcement', true)
+            ->assertJsonPath('message.requires_ack', true);
+
+        $messageId = $reply->json('message.id');
+        $this->actingAs($owner)
+            ->postJson(route('chat.api.messages.pin', $messageId))
+            ->assertOk()
+            ->assertJsonPath('pinned', true);
+        $this->actingAs($helper)
+            ->postJson(route('chat.api.messages.acknowledge', $messageId))
+            ->assertOk();
+        $this->actingAs($owner)
+            ->postJson(route('chat.api.messages.task', $messageId))
+            ->assertCreated();
+        $this->actingAs($owner)
+            ->getJson(route('chat.api.search', [
+                'conversation_id' => $conversation->id,
+                'q' => 'morgen',
+            ]))
+            ->assertOk()
+            ->assertJsonPath('messages.0.id', $original->id);
+
+        $this->actingAs($owner)->put(route('mijncn.chat.groups.update', $conversation), [
+            'name' => 'Projectgroep vernieuwd',
+            'retention_days' => 90,
+            'user_ids' => [$owner->id, $helper->id],
+            'admin_ids' => [$owner->id],
+        ])->assertRedirect(route('mijncn.chat', ['gesprek' => $conversation->id]));
+
+        $this->assertDatabaseHas('chat_conversations', [
+            'id' => $conversation->id,
+            'name' => 'Projectgroep vernieuwd',
+            'retention_days' => 90,
+        ]);
+        $this->assertDatabaseHas('chat_message_acknowledgements', [
+            'message_id' => $messageId,
+            'user_id' => $helper->id,
+        ]);
+        $this->assertNotNull(ChatMessage::findOrFail($messageId)->task_id);
+    }
+
     public function test_only_owner_can_run_the_messenger_installer(): void
     {
         $helper = User::factory()->create(['role' => \App\Enums\UserRole::Helper]);

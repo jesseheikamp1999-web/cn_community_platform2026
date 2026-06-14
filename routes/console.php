@@ -23,4 +23,25 @@ Artisan::command('cn:automate-community', function () {
     $this->info($result['award_phases'].' Awards-meldingen en '.$result['birthdays'].' verjaardagen verwerkt.');
 })->purpose('Verwerk Awards-fasen, Discord-aankondigingen en verjaardagsmeldingen');
 
+Artisan::command('cn:cleanup-chat', function () {
+    $deleted = 0;
+    \App\Models\ChatConversation::whereNotNull('retention_days')
+        ->each(function (\App\Models\ChatConversation $conversation) use (&$deleted): void {
+            $messages = $conversation->messages()
+                ->where('created_at', '<', now()->subDays($conversation->retention_days))
+                ->whereNull('pinned_at')
+                ->with('attachments')
+                ->get();
+            foreach ($messages as $message) {
+                foreach ($message->attachments as $attachment) {
+                    \Illuminate\Support\Facades\Storage::disk($attachment->disk)->delete($attachment->path);
+                }
+                $message->delete();
+                $deleted++;
+            }
+        });
+    $this->info($deleted.' oude chatberichten zijn verwijderd.');
+})->purpose('Verwijder oude, niet-vastgezette chatberichten volgens de bewaartermijn');
+
 Schedule::command('cn:automate-community')->everyMinute()->withoutOverlapping();
+Schedule::command('cn:cleanup-chat')->dailyAt('03:30')->withoutOverlapping();

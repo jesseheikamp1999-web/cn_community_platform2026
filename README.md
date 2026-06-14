@@ -115,7 +115,13 @@ Functies:
 
 - privegesprekken, Staff Chat, Management Chat en eigen groepen;
 - typing indicator, online-status, leesstatus en ongelezen badges;
-- bewerken, verwijderen, emoji en afbeeldingen tot 5 MB;
+- antwoorden, emoji-reacties, vastgezette berichten en zoeken per gesprek;
+- afbeeldingen, PDF-, Word-, Excel- en tekstbestanden tot 10 MB;
+- groepsafbeeldingen, groepsbeheerders en deelnemersbeheer;
+- gedempte gesprekken, lokale conceptberichten en `@mentions`;
+- afwezigheidsstatus, taken vanuit berichten en verplichte leesbevestigingen;
+- gedeelde mediabibliotheek, archiveren en instelbare bewaartermijnen;
+- bewerken en verwijderen van eigen berichten;
 - mobiel Messenger-scherm en een apart licht/donker thema;
 - deelnemercontrole, CSRF, servervalidatie en rate limiting.
 
@@ -132,7 +138,17 @@ php artisan route:cache
 ```
 
 `storage:link` is nodig om verstuurde afbeeldingen via `/storage` te tonen. Op
-Plesk hoeft geen achtergrondproces of cronjob voor de chat te draaien.
+Plesk hoeft geen permanent achtergrondproces voor de chat te draaien. Voor
+automatische verwijdering volgens de ingestelde bewaartermijn moet de bestaande
+Laravel scheduler iedere minuut via Plesk worden aangeroepen:
+
+```bash
+php /var/www/vhosts/JOUW-DOMEIN/httpdocs/artisan schedule:run
+```
+
+De chat-cleanup zelf draait vervolgens dagelijks om 03:30. Zonder deze cronjob
+blijft de Messenger gewoon werken, maar worden oude berichten niet automatisch
+opgeruimd.
 
 ## Beveiliging
 

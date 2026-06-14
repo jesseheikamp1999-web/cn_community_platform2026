@@ -16,7 +16,7 @@
         <div>
             <span>Eenmalige database-update</span>
             <h2>Maak Staff Messenger actief</h2>
-            <p>Deze actie voert uitsluitend de meegeleverde Messenger-migratie uit. Bestaande MijnCN-berichten en gebruikers blijven behouden.</p>
+            <p>Deze actie voert de nog openstaande veilige database-updates uit. Bestaande MijnCN-berichten en gebruikers blijven behouden.</p>
 
             @if($errors->has('chat_installation'))
                 <div class="form-error">{{ $errors->first('chat_installation') }}</div>

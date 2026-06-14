@@ -61,15 +61,23 @@ Route::middleware('auth')->group(function () {
     Route::post('/mijn-cn/chat/installeren', [StaffChatController::class, 'install'])->name('mijncn.chat.install');
     Route::post('/mijn-cn/chat/start', [StaffChatController::class, 'start'])->name('mijncn.chat.start');
     Route::post('/mijn-cn/chat/groep', [StaffChatController::class, 'createGroup'])->name('mijncn.chat.groups.store');
+    Route::put('/mijn-cn/chat/groep/{conversation}', [StaffChatController::class, 'updateGroup'])->name('mijncn.chat.groups.update');
+    Route::post('/mijn-cn/chat/{conversation}/dempen', [StaffChatController::class, 'mute'])->name('mijncn.chat.mute');
+    Route::post('/mijn-cn/chat/{conversation}/archiveren', [StaffChatController::class, 'archive'])->name('mijncn.chat.archive');
     Route::prefix('api/chat')->name('chat.api.')->group(function () {
         Route::get('/conversations', [StaffChatController::class, 'conversationsApi'])->name('conversations');
         Route::get('/messages', [StaffChatController::class, 'messagesApi'])->name('messages');
+        Route::get('/search', [StaffChatController::class, 'search'])->middleware('throttle:30,1')->name('search');
         Route::post('/send', [StaffChatController::class, 'sendApi'])->middleware('throttle:30,1')->name('send');
         Route::post('/typing', [StaffChatController::class, 'typing'])->middleware('throttle:90,1')->name('typing');
         Route::post('/read', [StaffChatController::class, 'read'])->name('read');
         Route::get('/presence', [StaffChatController::class, 'presence'])->name('presence');
         Route::patch('/messages/{message}', [StaffChatController::class, 'updateMessage'])->middleware('throttle:30,1')->name('messages.update');
         Route::delete('/messages/{message}', [StaffChatController::class, 'deleteMessage'])->middleware('throttle:30,1')->name('messages.delete');
+        Route::post('/messages/{message}/reaction', [StaffChatController::class, 'react'])->middleware('throttle:60,1')->name('messages.react');
+        Route::post('/messages/{message}/pin', [StaffChatController::class, 'pin'])->name('messages.pin');
+        Route::post('/messages/{message}/acknowledge', [StaffChatController::class, 'acknowledge'])->name('messages.acknowledge');
+        Route::post('/messages/{message}/task', [StaffChatController::class, 'createTask'])->name('messages.task');
     });
     Route::get('/mijn-cn/{module}', [MijnCnController::class, 'show'])
         ->whereIn('module', ['profile', 'notifications', 'inbox', 'nominations', 'votes', 'results', 'lessons', 'exams', 'certificates', 'badges', 'tasks', 'nomi', 'settings', 'absences', 'birthdays', 'community'])

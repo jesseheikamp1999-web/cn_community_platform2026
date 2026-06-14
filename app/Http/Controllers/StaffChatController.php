@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\ChatConversation;
 use App\Models\ChatMessage;
+use App\Models\Task;
 use App\Models\User;
 use App\Services\StaffChatService;
 use Carbon\Carbon;
@@ -14,6 +15,7 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -35,8 +37,27 @@ class StaffChatController extends Controller
         if ($selected) {
             $this->markRead($selected, $request->user());
             $selected->unread_count = 0;
-            $selected->load(['messages' => fn ($query) => $query->with(['sender', 'attachments', 'readers'])->latest()->limit(30)]);
+            $selected->load([
+                'messages' => fn ($query) => $query->with($this->messageRelations())->latest()->limit(30),
+                'participants.staffProfile',
+            ]);
             $selected->setRelation('messages', $selected->messages->sortBy('created_at')->values());
+            $selected->can_manage = $this->canModerate($selected, $request->user());
+            $selected->is_muted = (bool) $selected->participants
+                ->firstWhere('id', $request->user()->id)?->pivot?->is_muted;
+            $selected->pinned_messages = $selected->messages()
+                ->whereNotNull('pinned_at')
+                ->with(['sender'])
+                ->latest('pinned_at')
+                ->limit(10)
+                ->get();
+            $selected->media = $selected->messages()
+                ->whereHas('attachments')
+                ->with(['attachments', 'sender'])
+                ->latest()
+                ->limit(30)
+                ->get()
+                ->flatMap->attachments;
         }
 
         $staffMembers = User::whereNot('role', 'member')
@@ -53,10 +74,7 @@ class StaffChatController extends Controller
         abort_unless($request->user()->role->value === 'owner', 403);
 
         try {
-            Artisan::call('migrate', [
-                '--force' => true,
-                '--path' => 'database/migrations/2026_06_13_120000_create_mijncn_messenger_tables.php',
-            ]);
+            Artisan::call('migrate', ['--force' => true]);
         } catch (\Throwable $exception) {
             report($exception);
 
@@ -123,6 +141,7 @@ class StaffChatController extends Controller
             ]);
             foreach ($ids as $id) {
                 $conversation->participants()->attach($id, [
+                    'is_admin' => $id === $request->user()->id,
                     'last_read_at' => now(),
                     'created_at' => now(),
                     'updated_at' => now(),
@@ -139,15 +158,38 @@ class StaffChatController extends Controller
     {
         $this->authorizeParticipant($conversation, $request->user());
         $data = $request->validate([
-            'body' => ['nullable', 'string', 'max:4000', 'required_without:image'],
-            'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,gif,webp', 'max:5120', 'required_without:body'],
+            'body' => ['nullable', 'string', 'max:4000'],
+            'attachment' => ['nullable', 'file', 'mimes:jpg,jpeg,png,gif,webp,pdf,doc,docx,xls,xlsx,txt', 'max:10240'],
+            'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,gif,webp', 'max:5120'],
+            'reply_to_id' => ['nullable', 'integer', 'exists:chat_messages,id'],
+            'is_announcement' => ['nullable', 'boolean'],
+            'requires_ack' => ['nullable', 'boolean'],
         ]);
+        abort_if(
+            blank(trim((string) ($data['body'] ?? '')))
+            && !$request->hasFile('attachment')
+            && !$request->hasFile('image'),
+            422,
+            'Een bericht of bestand is verplicht.'
+        );
+        if (!empty($data['reply_to_id'])) {
+            abort_unless(
+                $conversation->messages()->whereKey($data['reply_to_id'])->exists(),
+                422
+            );
+        }
+        $announcement = (bool) ($data['is_announcement'] ?? false);
+        abort_if($announcement && !$this->canModerate($conversation, $request->user()), 403);
+
         $message = $conversation->messages()->create([
             'sender_id' => $request->user()->id,
+            'reply_to_id' => $data['reply_to_id'] ?? null,
             'body' => trim((string) ($data['body'] ?? '')),
+            'is_announcement' => $announcement,
+            'requires_ack' => $announcement && (bool) ($data['requires_ack'] ?? false),
         ]);
-        if ($request->hasFile('image')) {
-            $file = $request->file('image');
+        $file = $request->file('attachment') ?: $request->file('image');
+        if ($file) {
             $path = $file->store('chat/'.now()->format('Y/m'), 'public');
             $message->attachments()->create([
                 'disk' => 'public',
@@ -158,11 +200,12 @@ class StaffChatController extends Controller
             ]);
         }
         $conversation->update(['last_message_at' => $message->created_at]);
+        $this->createMentionNotifications($message, $conversation, $request->user());
         $this->markRead($conversation, $request->user());
         $this->touchPresence($request->user());
 
         if ($request->expectsJson()) {
-            return response()->json(['message' => $this->messageData($message->load(['sender', 'attachments', 'readers']), $request->user())], 201);
+            return response()->json(['message' => $this->messageData($message->load($this->messageRelations()), $request->user())], 201);
         }
 
         return redirect()->route('mijncn.chat', ['gesprek' => $conversation->id]);
@@ -189,7 +232,7 @@ class StaffChatController extends Controller
         $this->authorizeParticipant($conversation, $request->user());
         $after = max(0, $request->integer('after'));
         $before = max(0, $request->integer('before'));
-        $query = $conversation->messages()->with(['sender', 'attachments', 'readers']);
+        $query = $conversation->messages()->with($this->messageRelations());
         if ($before > 0) {
             $messages = $query->where('id', '<', $before)->latest('id')->limit(30)->get()->reverse()->values();
         } else {
@@ -262,7 +305,7 @@ class StaffChatController extends Controller
         $data = $request->validate(['body' => ['required', 'string', 'max:4000']]);
         $message->update(['body' => trim($data['body']), 'edited_at' => now()]);
 
-        return response()->json(['message' => $this->messageData($message->load(['sender', 'attachments', 'readers']), $request->user())]);
+        return response()->json(['message' => $this->messageData($message->load($this->messageRelations()), $request->user())]);
     }
 
     public function deleteMessage(Request $request, ChatMessage $message): JsonResponse
@@ -278,9 +321,159 @@ class StaffChatController extends Controller
         return response()->json(['ok' => true, 'message_id' => $message->id]);
     }
 
+    public function search(Request $request): JsonResponse
+    {
+        $conversation = ChatConversation::findOrFail($request->integer('conversation_id'));
+        $this->authorizeParticipant($conversation, $request->user());
+        $query = trim((string) $request->query('q'));
+        abort_if(mb_strlen($query) < 2, 422);
+
+        return response()->json([
+            'messages' => $conversation->messages()
+                ->with($this->messageRelations())
+                ->whereNull('deleted_at')
+                ->where('body', 'like', '%'.$query.'%')
+                ->latest()
+                ->limit(50)
+                ->get()
+                ->map(fn ($message) => $this->messageData($message, $request->user())),
+        ]);
+    }
+
+    public function react(Request $request, ChatMessage $message): JsonResponse
+    {
+        $this->authorizeParticipant($message->conversation, $request->user());
+        $data = $request->validate(['emoji' => ['required', Rule::in(['👍', '❤️', '😂', '🎉', '👀', '✅'])]]);
+        $existing = $message->reactions()
+            ->where('user_id', $request->user()->id)
+            ->where('emoji', $data['emoji'])
+            ->first();
+        $existing
+            ? $existing->delete()
+            : $message->reactions()->create(['user_id' => $request->user()->id, 'emoji' => $data['emoji']]);
+
+        return response()->json([
+            'reactions' => $this->reactionData($message->fresh()->load('reactions'), $request->user()),
+        ]);
+    }
+
+    public function pin(Request $request, ChatMessage $message): JsonResponse
+    {
+        $this->authorizeParticipant($message->conversation, $request->user());
+        abort_unless($this->canModerate($message->conversation, $request->user()), 403);
+        $pinned = !$message->pinned_at;
+        $message->update([
+            'pinned_at' => $pinned ? now() : null,
+            'pinned_by' => $pinned ? $request->user()->id : null,
+        ]);
+
+        return response()->json(['pinned' => $pinned]);
+    }
+
+    public function acknowledge(Request $request, ChatMessage $message): JsonResponse
+    {
+        $this->authorizeParticipant($message->conversation, $request->user());
+        abort_unless($message->requires_ack, 422);
+        DB::table('chat_message_acknowledgements')->updateOrInsert(
+            ['message_id' => $message->id, 'user_id' => $request->user()->id],
+            ['acknowledged_at' => now()]
+        );
+
+        return response()->json(['ok' => true]);
+    }
+
+    public function mute(Request $request, ChatConversation $conversation): RedirectResponse
+    {
+        $this->authorizeParticipant($conversation, $request->user());
+        $muted = !(bool) $conversation->participants()
+            ->whereKey($request->user()->id)
+            ->firstOrFail()
+            ->pivot
+            ->is_muted;
+        $conversation->participants()->updateExistingPivot($request->user()->id, ['is_muted' => $muted]);
+
+        return back()->with('success', $muted ? 'Meldingen zijn gedempt.' : 'Meldingen staan weer aan.');
+    }
+
+    public function updateGroup(Request $request, ChatConversation $conversation): RedirectResponse
+    {
+        $this->authorizeParticipant($conversation, $request->user());
+        abort_if($conversation->type === 'direct', 422);
+        abort_unless($this->canModerate($conversation, $request->user()), 403);
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:80'],
+            'avatar' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:3072'],
+            'retention_days' => ['nullable', 'integer', Rule::in([7, 30, 90, 180, 365])],
+            'user_ids' => ['required', 'array', 'min:2', 'max:50'],
+            'user_ids.*' => ['integer', Rule::exists('users', 'id')->where(fn ($query) => $query->where('role', '!=', 'member'))],
+            'admin_ids' => ['nullable', 'array'],
+            'admin_ids.*' => ['integer'],
+        ]);
+        $updates = [
+            'name' => $data['name'],
+            'retention_days' => $data['retention_days'] ?? null,
+        ];
+        if ($request->hasFile('avatar')) {
+            if ($conversation->avatar_path) {
+                Storage::disk('public')->delete($conversation->avatar_path);
+            }
+            $updates['avatar_path'] = $request->file('avatar')->store('chat/groups', 'public');
+        }
+        $conversation->update($updates);
+        $admins = collect($data['admin_ids'] ?? [])->push($request->user()->id)->unique();
+        $members = collect($data['user_ids'])->push($request->user()->id)->unique();
+        $sync = $members->mapWithKeys(fn ($id) => [
+            $id => ['is_admin' => $admins->contains((int) $id)],
+        ])->all();
+        $conversation->participants()->sync($sync);
+
+        return redirect()->route('mijncn.chat', ['gesprek' => $conversation->id])
+            ->with('success', 'Groepsinstellingen bijgewerkt.');
+    }
+
+    public function archive(Request $request, ChatConversation $conversation): RedirectResponse
+    {
+        $this->authorizeParticipant($conversation, $request->user());
+        abort_unless($this->canModerate($conversation, $request->user()), 403);
+        $conversation->update(['archived_at' => $conversation->archived_at ? null : now()]);
+
+        return redirect()->route('mijncn.chat')->with('success', 'Gesprek gearchiveerd.');
+    }
+
+    public function createTask(Request $request, ChatMessage $message): JsonResponse
+    {
+        $this->authorizeParticipant($message->conversation, $request->user());
+        abort_if($message->deleted_at, 422);
+        $boardId = DB::table('boards')->orderBy('id')->value('id');
+        if (!$boardId) {
+            $boardId = DB::table('boards')->insertGetId([
+                'name' => 'Staff Taken',
+                'slug' => 'staff-taken',
+                'description' => 'Taken vanuit Staff Messenger',
+                'is_private' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+        $task = Task::create([
+            'board_id' => $boardId,
+            'creator_id' => $request->user()->id,
+            'title' => Str::limit($message->body ?: 'Opvolgen van chatbijlage', 120, ''),
+            'description' => 'Aangemaakt vanuit Staff Messenger, gesprek #'.$message->conversation_id.', bericht #'.$message->id,
+            'status' => 'open',
+            'priority' => 'normal',
+            'type' => 'community',
+            'is_public' => false,
+        ]);
+        $message->update(['task_id' => $task->id]);
+
+        return response()->json(['task_id' => $task->id, 'title' => $task->title], 201);
+    }
+
     private function conversations(User $user)
     {
         return ChatConversation::whereHas('participants', fn ($query) => $query->whereKey($user->id))
+            ->whereNull('archived_at')
             ->with([
                 'participants',
                 'messages' => fn ($query) => $query->with(['sender', 'attachments'])->latest()->limit(1),
@@ -340,6 +533,17 @@ class StaffChatController extends Controller
             'initials' => strtoupper(substr($message->sender->name, 0, 2)),
             'time' => $message->created_at->format('H:i'),
             'date' => $message->created_at->translatedFormat('d M Y'),
+            'reply' => $message->replyTo ? [
+                'id' => $message->replyTo->id,
+                'sender' => $message->replyTo->sender?->name,
+                'body' => Str::limit($message->replyTo->body ?: 'Bijlage', 100),
+            ] : null,
+            'pinned' => (bool) $message->pinned_at,
+            'announcement' => (bool) $message->is_announcement,
+            'requires_ack' => (bool) $message->requires_ack,
+            'acknowledged' => $message->acknowledgements->contains('id', $viewer->id),
+            'task' => $message->task ? ['id' => $message->task->id, 'title' => $message->task->title] : null,
+            'reactions' => $this->reactionData($message, $viewer),
             'read' => $message->sender_id === $viewer->id
                 && $message->readers->where('id', '!=', $viewer->id)->isNotEmpty(),
             'attachments' => $message->attachments->map(fn ($attachment) => [
@@ -347,8 +551,78 @@ class StaffChatController extends Controller
                 'name' => $attachment->original_name,
                 'mime_type' => $attachment->mime_type,
                 'size' => $attachment->size,
+                'is_image' => str_starts_with($attachment->mime_type, 'image/'),
             ])->values(),
         ];
+    }
+
+    private function reactionData(ChatMessage $message, User $viewer): array
+    {
+        return $message->reactions
+            ->groupBy('emoji')
+            ->map(fn ($reactions, $emoji) => [
+                'emoji' => $emoji,
+                'count' => $reactions->count(),
+                'mine' => $reactions->contains('user_id', $viewer->id),
+            ])
+            ->values()
+            ->all();
+    }
+
+    private function messageRelations(): array
+    {
+        return [
+            'sender',
+            'attachments',
+            'readers',
+            'reactions',
+            'acknowledgements',
+            'task',
+            'replyTo.sender',
+        ];
+    }
+
+    private function canModerate(ChatConversation $conversation, User $user): bool
+    {
+        if (in_array($user->role->value, ['owner', 'management'], true)) {
+            return true;
+        }
+
+        return (bool) $conversation->participants()
+            ->whereKey($user->id)
+            ->first()?->pivot?->is_admin;
+    }
+
+    private function createMentionNotifications(ChatMessage $message, ChatConversation $conversation, User $sender): void
+    {
+        preg_match_all('/@([A-Za-z0-9_.-]+)/u', $message->body, $matches);
+        $handles = collect($matches[1] ?? [])->map(fn ($handle) => mb_strtolower($handle));
+        $recipients = $conversation->participants()
+            ->where('users.id', '!=', $sender->id)
+            ->get()
+            ->filter(function (User $user) use ($handles, $message): bool {
+                return $message->is_announcement
+                    || $handles->contains(mb_strtolower((string) $user->discord_username))
+                    || $handles->contains(mb_strtolower(str_replace(' ', '.', $user->name)));
+            });
+        foreach ($recipients as $recipient) {
+            if ($recipient->pivot->is_muted && !$message->is_announcement) {
+                continue;
+            }
+            DB::table('notifications')->insert([
+                'id' => (string) Str::uuid(),
+                'type' => $message->is_announcement ? 'chat_announcement' : 'chat_mention',
+                'notifiable_type' => User::class,
+                'notifiable_id' => $recipient->id,
+                'data' => json_encode([
+                    'title' => $message->is_announcement ? 'Nieuwe staffmededeling' : $sender->name.' noemde je',
+                    'message' => Str::limit($message->body, 150),
+                    'url' => route('mijncn.chat', ['gesprek' => $conversation->id]),
+                ]),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
     }
 
     private function touchPresence(User $user): void
@@ -370,6 +644,10 @@ class StaffChatController extends Controller
             'chat_typing_statuses',
             'chat_user_presences',
             'chat_message_attachments',
-        ])->every(fn (string $table): bool => Schema::hasTable($table));
+            'chat_message_reactions',
+            'chat_message_acknowledgements',
+        ])->every(fn (string $table): bool => Schema::hasTable($table))
+            && Schema::hasColumns('chat_conversations', ['avatar_path', 'retention_days', 'archived_at'])
+            && Schema::hasColumns('chat_messages', ['reply_to_id', 'task_id', 'pinned_at']);
     }
 }

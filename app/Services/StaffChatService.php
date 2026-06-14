@@ -15,6 +15,7 @@ class StaffChatService
             ['created_by' => $user->id]
         );
         $this->syncEligibleParticipants($staff, ['helper', 'moderator', 'admin', 'management', 'owner', 'jury', 'partner_manager']);
+        $this->ensureCreatorIsAdmin($staff);
 
         if (in_array($user->role->value, ['management', 'owner'], true)) {
             $management = ChatConversation::firstOrCreate(
@@ -22,6 +23,7 @@ class StaffChatService
                 ['created_by' => $user->id]
             );
             $this->syncEligibleParticipants($management, ['management', 'owner']);
+            $this->ensureCreatorIsAdmin($management);
         }
     }
 
@@ -60,6 +62,17 @@ class StaffChatService
             $conversation->participants()->syncWithoutDetaching([
                 $id => ['created_at' => now(), 'updated_at' => now()],
             ]);
+        }
+    }
+
+    private function ensureCreatorIsAdmin(ChatConversation $conversation): void
+    {
+        if ($conversation->created_by
+            && $conversation->participants()->whereKey($conversation->created_by)->exists()) {
+            $conversation->participants()->updateExistingPivot(
+                $conversation->created_by,
+                ['is_admin' => true]
+            );
         }
     }
 }

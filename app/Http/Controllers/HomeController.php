@@ -14,11 +14,20 @@ class HomeController extends Controller
 {
     public function __invoke(ContentRepository $content)
     {
+        $partners = Partner::where('status', 'active');
+        if (Schema::hasColumn('partners', 'is_featured')) {
+            $partners->where('is_featured', true)
+                ->orderBy('position')
+                ->orderByDesc('score');
+        } else {
+            $partners->orderBy('name');
+        }
+
         return view('home', [
             'news' => $content->latestNews(3),
             'edition' => AwardEdition::where('type', 'cn_awards')->latest('year')->first(),
             'winners' => Nomination::where('status', 'winner')->with('category')->latest('updated_at')->limit(4)->get(),
-            'partners' => Partner::where('status', 'active')->limit(6)->get(),
+            'partners' => $partners->limit(Schema::hasColumn('partners', 'is_featured') ? 10 : 6)->get(),
             'staff' => User::whereIn('role', ['helper', 'moderator', 'admin', 'management', 'owner'])
                 ->with('staffProfile')
                 ->withExists(['absenceRequests as is_currently_absent' => fn ($query) => $query->current()])

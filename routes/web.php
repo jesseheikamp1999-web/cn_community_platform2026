@@ -79,16 +79,19 @@ Route::middleware('auth')->group(function () {
         Route::post('/messages/{message}/acknowledge', [StaffChatController::class, 'acknowledge'])->name('messages.acknowledge');
         Route::post('/messages/{message}/task', [StaffChatController::class, 'createTask'])->name('messages.task');
     });
-    Route::get('/mijn-cn/{module}', [MijnCnController::class, 'show'])
-        ->whereIn('module', ['profile', 'notifications', 'inbox', 'nominations', 'votes', 'results', 'lessons', 'exams', 'certificates', 'badges', 'tasks', 'nomi', 'settings', 'absences', 'birthdays', 'community'])
-        ->name('mijncn.module');
     Route::patch('/mijn-cn/profiel/bijwerken', [MijnCnController::class, 'updateProfile'])->name('mijncn.profile.update');
     Route::post('/mijn-cn/meldingen/gelezen', [MijnCnController::class, 'markNotificationsRead'])->name('mijncn.notifications.read');
     Route::post('/mijn-cn/nomi/vragen', [MijnCnController::class, 'askNomi'])->middleware('throttle:10,1')->name('mijncn.nomi.ask');
     Route::post('/mijn-cn/taken/{task}/claimen', [MijnCnController::class, 'claimTask'])->name('mijncn.tasks.claim');
     Route::post('/mijn-cn/taken/{task}/voltooien', [MijnCnController::class, 'completeTask'])->name('mijncn.tasks.complete');
+    Route::post('/mijn-cn/partners', [MijnCnController::class, 'storePartner'])->name('mijncn.partners.store');
+    Route::put('/mijn-cn/partners/{partner}', [MijnCnController::class, 'updatePartner'])->name('mijncn.partners.update');
+    Route::delete('/mijn-cn/partners/{partner}', [MijnCnController::class, 'destroyPartner'])->name('mijncn.partners.destroy');
     Route::post('/mijn-cn/afwezigheid', [MijnCnController::class, 'reportAbsence'])->name('mijncn.absences.store');
     Route::delete('/mijn-cn/afwezigheid/{absence}', [MijnCnController::class, 'cancelAbsence'])->name('mijncn.absences.cancel');
+    Route::get('/mijn-cn/{module}', [MijnCnController::class, 'show'])
+        ->whereIn('module', ['profile', 'notifications', 'inbox', 'nominations', 'votes', 'results', 'lessons', 'exams', 'certificates', 'badges', 'tasks', 'nomi', 'settings', 'absences', 'birthdays', 'community', 'partners'])
+        ->name('mijncn.module');
     Route::post('/awards/categorie/{category}/nomineren', [AwardActionController::class, 'nominate'])->name('awards.nominate');
     Route::post('/awards/nominatie/{nomination}/stem', [AwardActionController::class, 'vote'])->name('awards.vote');
 });

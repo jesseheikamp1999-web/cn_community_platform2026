@@ -83,7 +83,10 @@ class DatabaseSeeder extends Seeder
         }
 
         foreach ([['Cloud86', 'https://cloud86.nl', 'strategic'], ['Studio Nova', '#', 'creative'], ['PixelForge', '#', 'community']] as $partner) {
-            Partner::create(['name' => $partner[0], 'slug' => Str::slug($partner[0]), 'website' => $partner[1], 'status' => 'active', 'tier' => $partner[2]]);
+            Partner::updateOrCreate(
+                ['slug' => Str::slug($partner[0])],
+                ['name' => $partner[0], 'website' => $partner[1], 'status' => 'active', 'tier' => $partner[2]]
+            );
         }
 
         foreach ([['Eerste stap', 'Je hebt je eerste Academy-les afgerond.', 100], ['Communitybouwer', 'Je hebt zichtbaar bijgedragen aan CN.', 1000], ['CN Veteraan', 'Een vaste waarde binnen de community.', 2500]] as $badge) {

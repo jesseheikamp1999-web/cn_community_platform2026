@@ -50,15 +50,30 @@
         <span class="eyebrow"><i></i> ONZE PARTNERS</span>
         <strong>Samen maken we meer mogelijk.</strong>
     </div>
-    <div class="partner-showcase-list">
+    <div class="partner-showcase-list ranked">
         @foreach($partners as $partner)
             @if($partner->destination_url)
                 <a href="{{ $partner->destination_url }}" target="_blank" rel="noopener noreferrer" title="Bezoek {{ $partner->name }}">
-                    <span>{{ strtoupper(substr($partner->name, 0, 1)) }}</span>
-                    <b>{{ $partner->name }}</b><em>&nearr;</em>
+                    <span class="partner-logo">
+                        @if($partner->logo_url)
+                            <img src="{{ $partner->logo_url }}" alt="">
+                        @else
+                            {{ strtoupper(substr($partner->name, 0, 1)) }}
+                        @endif
+                    </span>
+                    <b>{{ $partner->name }}</b><small>#{{ $partner->position ?? $loop->iteration }} · {{ $partner->score ?? 0 }}</small><em>&nearr;</em>
                 </a>
             @else
-                <div class="partner-name"><span>{{ strtoupper(substr($partner->name, 0, 1)) }}</span><b>{{ $partner->name }}</b></div>
+                <div class="partner-name">
+                    <span class="partner-logo">
+                        @if($partner->logo_url)
+                            <img src="{{ $partner->logo_url }}" alt="">
+                        @else
+                            {{ strtoupper(substr($partner->name, 0, 1)) }}
+                        @endif
+                    </span>
+                    <b>{{ $partner->name }}</b><small>#{{ $partner->position ?? $loop->iteration }} · {{ $partner->score ?? 0 }}</small>
+                </div>
             @endif
         @endforeach
     </div>
@@ -110,11 +125,7 @@
             @php($available = !$staffMember->is_currently_absent && ($staffMember->staffProfile?->status ?? 'active') !== 'inactive')
             <article>
                 <div class="portrait">
-                    @if($staffMember->discord_avatar_url)
-                        <img src="{{ $staffMember->discord_avatar_url }}" alt="Discord-profielfoto van {{ $staffMember->name }}">
-                    @else
-                        {{ strtoupper(substr($staffMember->name, 0, 1)) }}
-                    @endif
+                    @include('components.user-avatar', ['user' => $staffMember])
                 </div>
                 <h3>{{ $staffMember->name }}</h3>
                 <p>{{ $staffMember->publicPosition() }}</p>

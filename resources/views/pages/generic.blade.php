@@ -66,10 +66,15 @@
                     </article>
                 @elseif($page === 'partners')
                     <article class="content-card partner-public-card">
-                        <div class="content-partner-mark">{{ strtoupper(substr($item->name, 0, 1)) }}</div>
+                        @if($item->logo_url)
+                            <img class="content-partner-logo" src="{{ $item->logo_url }}" alt="">
+                        @else
+                            <div class="content-partner-mark">{{ strtoupper(substr($item->name, 0, 1)) }}</div>
+                        @endif
                         <span class="eyebrow"><i></i> CN PARTNER</span>
                         <h3>{{ $item->name }}</h3>
                         <p>{{ $item->description ?: 'Samenwerking binnen de CN Community.' }}</p>
+                        <div class="partner-public-score"><span>#{{ $item->position ?? $loop->iteration }}</span><b>{{ $item->score ?? 0 }}/100</b><em>{{ ucfirst($item->category ?? 'partner') }}</em></div>
                         @if($item->destination_url)<a class="text-link" href="{{ $item->destination_url }}" target="_blank" rel="noopener noreferrer">Bezoek {{ $item->name }} &rarr;</a>@endif
                     </article>
                 @else

@@ -13,6 +13,7 @@ use App\Models\Nomination;
 use App\Models\Content;
 use App\Models\ChatConversation;
 use App\Models\ChatMessage;
+use App\Models\Partner;
 use App\Models\Permission;
 use App\Models\QuestionBank;
 use App\Models\Task;
@@ -62,6 +63,16 @@ class PlatformTest extends TestCase
         $this->get(route('home'))
             ->assertOk()
             ->assertSee(number_format($expected).'+');
+    }
+
+    public function test_homepage_shows_ranked_partner_projects(): void
+    {
+        $this->get(route('home'))
+            ->assertOk()
+            ->assertSee('Stumpertjes')
+            ->assertSee('NightMC')
+            ->assertSee('#1')
+            ->assertSee('94');
     }
 
     public function test_dashboard_requires_authentication(): void
@@ -787,6 +798,85 @@ class PlatformTest extends TestCase
             ->assertSee($communityBirthday->name)
             ->assertSee($staffBirthday->name)
             ->assertDontSee('Prive Verjaardag');
+    }
+
+    public function test_birthday_avatar_has_a_safe_discord_fallback(): void
+    {
+        $viewer = User::factory()->create();
+        User::factory()->create([
+            'name' => 'Luca',
+            'discord_id' => 'broken-avatar-id',
+            'discord_avatar' => 'https://cdn.discordapp.com/not-found.png',
+            'birth_date' => now()->addMonth()->toDateString(),
+            'birthday_visibility' => 'community',
+        ]);
+
+        $this->actingAs($viewer)
+            ->get(route('mijncn.module', 'birthdays'))
+            ->assertOk()
+            ->assertSee('onerror=', false)
+            ->assertSee('LU');
+    }
+
+    public function test_owner_can_manage_partner_projects_from_mijncn(): void
+    {
+        Storage::fake('public');
+        $owner = User::factory()->create(['role' => \App\Enums\UserRole::Owner]);
+
+        $this->actingAs($owner)
+            ->get(route('mijncn.module', 'partners'))
+            ->assertOk()
+            ->assertSee('Projecten &amp; partners', false);
+
+        $image = UploadedFile::fake()->createWithContent(
+            'project.png',
+            base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=')
+        );
+        $this->actingAs($owner)->post(route('mijncn.partners.store'), [
+            'name' => 'CN Test Project',
+            'description' => 'Een testproject voor de ranglijst.',
+            'website' => 'https://example.com',
+            'status' => 'active',
+            'tier' => 'community',
+            'category' => 'project',
+            'score' => 96,
+            'position' => 2,
+            'is_featured' => '1',
+            'logo' => $image,
+        ])->assertSessionHasNoErrors();
+
+        $partner = Partner::where('slug', 'cn-test-project')->firstOrFail();
+        Storage::disk('public')->assertExists($partner->logo);
+        $this->assertDatabaseHas('partners', [
+            'id' => $partner->id,
+            'score' => 96,
+            'position' => 2,
+            'is_featured' => true,
+        ]);
+
+        $this->actingAs($owner)->put(route('mijncn.partners.update', $partner), [
+            'name' => 'CN Test Project',
+            'description' => 'Bijgewerkte omschrijving.',
+            'website' => 'https://example.com',
+            'status' => 'active',
+            'tier' => 'strategic',
+            'category' => 'server',
+            'score' => 99,
+            'position' => 1,
+            'is_featured' => '1',
+        ])->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('partners', [
+            'id' => $partner->id,
+            'tier' => 'strategic',
+            'score' => 99,
+            'position' => 1,
+        ]);
+
+        $this->get(route('home'))
+            ->assertOk()
+            ->assertSee('CN Test Project')
+            ->assertSee('99');
     }
 
     public function test_birthday_notifications_are_sent_once_to_mijncn_and_discord(): void

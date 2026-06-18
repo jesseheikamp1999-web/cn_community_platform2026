@@ -18,6 +18,7 @@
         'absences' => ['Afwezigheid', 'Geef aan wanneer je tijdelijk niet beschikbaar bent voor CN.'],
         'birthdays' => ['Verjaardagen', 'Bekijk aankomende verjaardagen volgens de privacyvoorkeuren van leden.'],
         'community' => ['Communityleden', 'De mensen die via Discord zijn ingelogd en onderdeel zijn van MijnCN.'],
+        'partners' => ['Projecten & partners', 'Beheer de publieke server- en projectranglijst van CN.'],
     ];
     [$pageTitle, $pageDescription] = $titles[$module];
 @endphp
@@ -328,6 +329,69 @@
                 </div>
                 {{ $members->links() }}
             </section>
+        </section>
+
+    @elseif($module === 'partners')
+        <section class="module-card partner-manager">
+            <div class="module-card-heading">
+                <div><span>RANGLIJST</span><h2>Nieuw project toevoegen</h2></div>
+                <a class="text-action" href="{{ route('partners') }}">Publieke pagina bekijken</a>
+            </div>
+            <form class="module-form partner-form" method="post" action="{{ route('mijncn.partners.store') }}" enctype="multipart/form-data">
+                @csrf
+                <div class="module-form-grid">
+                    <label>Naam<input name="name" required maxlength="80" placeholder="Bijvoorbeeld NightMC"></label>
+                    <label>Website of Discord link<input name="website" type="url" placeholder="https://discord.gg/..."></label>
+                    <label>Type<select name="category"><option value="server">Server</option><option value="project">Project</option><option value="partner">Partner</option><option value="creator">Creator</option></select></label>
+                    <label>Status<select name="status"><option value="active">Actief</option><option value="pending">In aanvraag</option><option value="warning">Waarschuwing</option><option value="ended">Gestopt</option><option value="lead">Lead</option></select></label>
+                    <label>Tier<input name="tier" value="community" required maxlength="40"></label>
+                    <label>Score<input name="score" type="number" min="0" max="100" value="80" required></label>
+                    <label>Positie<input name="position" type="number" min="1" max="999" value="{{ $partners->count() + 1 }}" required></label>
+                    <label>Afbeelding<input name="logo" type="file" accept="image/jpeg,image/png,image/webp"></label>
+                </div>
+                <label>Omschrijving<textarea name="description" rows="3" maxlength="240" placeholder="Korte omschrijving voor de publieke kaart."></textarea></label>
+                <label>Interne notitie<textarea name="notes" rows="2" maxlength="1000" placeholder="Niet publiek zichtbaar."></textarea></label>
+                <label class="check-label"><input type="checkbox" name="is_featured" value="1" checked> Tonen op homepage</label>
+                <button class="button button-primary">Project toevoegen</button>
+            </form>
+        </section>
+
+        <section class="partner-manager-grid">
+            @foreach($partners as $partner)
+                <article class="module-card partner-edit-card">
+                    <div class="partner-edit-preview">
+                        <div class="partner-rank-logo">
+                            @if($partner->logo_url)
+                                <img src="{{ $partner->logo_url }}" alt="">
+                            @else
+                                <span>{{ strtoupper(substr($partner->name, 0, 1)) }}</span>
+                            @endif
+                        </div>
+                        <div><span>#{{ $partner->position }} · {{ strtoupper($partner->category) }}</span><h3>{{ $partner->name }}</h3><p>{{ $partner->score }}/100 punten</p></div>
+                    </div>
+                    <form class="module-form partner-form compact" method="post" action="{{ route('mijncn.partners.update', $partner) }}" enctype="multipart/form-data">
+                        @csrf @method('PUT')
+                        <input name="name" value="{{ $partner->name }}" required maxlength="80">
+                        <textarea name="description" rows="2" maxlength="240" placeholder="Omschrijving">{{ $partner->description }}</textarea>
+                        <input name="website" type="url" value="{{ $partner->website }}" placeholder="Website of Discord link">
+                        <div class="module-form-grid small-grid">
+                            <select name="category"><option value="server" @selected($partner->category === 'server')>Server</option><option value="project" @selected($partner->category === 'project')>Project</option><option value="partner" @selected($partner->category === 'partner')>Partner</option><option value="creator" @selected($partner->category === 'creator')>Creator</option></select>
+                            <select name="status"><option value="active" @selected($partner->status === 'active')>Actief</option><option value="pending" @selected($partner->status === 'pending')>In aanvraag</option><option value="warning" @selected($partner->status === 'warning')>Waarschuwing</option><option value="ended" @selected($partner->status === 'ended')>Gestopt</option><option value="lead" @selected($partner->status === 'lead')>Lead</option></select>
+                            <input name="tier" value="{{ $partner->tier }}" required maxlength="40">
+                            <input name="score" type="number" min="0" max="100" value="{{ $partner->score }}" required>
+                            <input name="position" type="number" min="1" max="999" value="{{ $partner->position }}" required>
+                            <input name="logo" type="file" accept="image/jpeg,image/png,image/webp">
+                        </div>
+                        <textarea name="notes" rows="2" maxlength="1000" placeholder="Interne notitie">{{ $partner->notes }}</textarea>
+                        <label class="check-label"><input type="checkbox" name="is_featured" value="1" @checked($partner->is_featured)> Tonen op homepage</label>
+                        <button class="button button-primary button-small">Opslaan</button>
+                    </form>
+                    <form method="post" action="{{ route('mijncn.partners.destroy', $partner) }}" onsubmit="return confirm('Project verwijderen?')">
+                        @csrf @method('DELETE')
+                        <button class="text-action danger">Verwijderen</button>
+                    </form>
+                </article>
+            @endforeach
         </section>
 
     @elseif($module === 'nomi')

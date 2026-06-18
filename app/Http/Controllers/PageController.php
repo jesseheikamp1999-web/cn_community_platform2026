@@ -7,6 +7,7 @@ use App\Models\Content;
 use App\Models\Partner;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 
 class PageController extends Controller
 {
@@ -18,7 +19,11 @@ class PageController extends Controller
             'awards' => ['items' => AwardEdition::where('type', 'cn_awards')->latest('year')->get()],
             'mini-awards' => ['items' => AwardEdition::where('type', 'mini_awards')->latest('year')->get()],
             'nieuws' => ['items' => Content::published()->where('type', 'news')->latest('published_at')->paginate(9)],
-            'partners' => ['items' => Partner::where('status', 'active')->orderBy('name')->get()],
+            'partners' => ['items' => tap(Partner::where('status', 'active'), function ($query): void {
+                Schema::hasColumn('partners', 'position')
+                    ? $query->orderBy('position')->orderByDesc('score')
+                    : $query->orderBy('name');
+            })->get()],
             'staff' => ['items' => User::whereNot('role', 'member')
                 ->with('staffProfile')
                 ->withExists(['absenceRequests as is_currently_absent' => fn ($query) => $query->current()])

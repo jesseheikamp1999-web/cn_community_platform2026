@@ -7,6 +7,7 @@ use App\Models\AbsenceRequest;
 use App\Models\DiscordMember;
 use App\Models\LearningPath;
 use App\Models\Lesson;
+use App\Models\Partner;
 use App\Models\Task;
 use App\Models\User;
 use App\Services\NomiAiService;
@@ -16,6 +17,8 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
 use RuntimeException;
 
@@ -148,6 +151,12 @@ class MijnCnController extends Controller
                 ->paginate(24)
                 ->withQueryString();
             $data['communitySearch'] = $search;
+        } elseif ($module === 'partners') {
+            abort_unless($this->canManagePartners($user), 403);
+            $data['partners'] = Partner::orderBy('position')
+                ->orderByDesc('score')
+                ->orderBy('name')
+                ->get();
         }
 
         return view('dashboard.module', $data);
@@ -253,8 +262,75 @@ class MijnCnController extends Controller
         return back()->with('success', 'Je afwezigheidsmelding is ingetrokken.');
     }
 
+    public function storePartner(Request $request): RedirectResponse
+    {
+        abort_unless($this->canManagePartners($request->user()), 403);
+        $data = $this->validatePartner($request);
+        $data['slug'] = Str::slug($data['name']);
+        $data['is_featured'] = $request->boolean('is_featured');
+        if ($request->hasFile('logo')) {
+            $data['logo'] = $request->file('logo')->store('partners', 'public');
+        }
+
+        Partner::create($data);
+
+        return back()->with('success', 'Project toegevoegd aan de ranglijst.');
+    }
+
+    public function updatePartner(Request $request, Partner $partner): RedirectResponse
+    {
+        abort_unless($this->canManagePartners($request->user()), 403);
+        $data = $this->validatePartner($request, $partner);
+        $data['slug'] = Str::slug($data['name']);
+        $data['is_featured'] = $request->boolean('is_featured');
+        if ($request->hasFile('logo')) {
+            if ($partner->logo && !str_starts_with($partner->logo, 'http')) {
+                Storage::disk('public')->delete($partner->logo);
+            }
+            $data['logo'] = $request->file('logo')->store('partners', 'public');
+        }
+        $partner->update($data);
+
+        return back()->with('success', 'Project bijgewerkt.');
+    }
+
+    public function destroyPartner(Request $request, Partner $partner): RedirectResponse
+    {
+        abort_unless($this->canManagePartners($request->user()), 403);
+        if ($partner->logo && !str_starts_with($partner->logo, 'http')) {
+            Storage::disk('public')->delete($partner->logo);
+        }
+        $partner->delete();
+
+        return back()->with('success', 'Project verwijderd uit de ranglijst.');
+    }
+
     private function modules(): array
     {
-        return ['profile', 'notifications', 'inbox', 'nominations', 'votes', 'results', 'lessons', 'exams', 'certificates', 'badges', 'tasks', 'nomi', 'settings', 'absences', 'birthdays', 'community'];
+        return ['profile', 'notifications', 'inbox', 'nominations', 'votes', 'results', 'lessons', 'exams', 'certificates', 'badges', 'tasks', 'nomi', 'settings', 'absences', 'birthdays', 'community', 'partners'];
+    }
+
+    private function canManagePartners(User $user): bool
+    {
+        return in_array($user->role->value, ['owner', 'management', 'partner_manager'], true)
+            || $user->hasPermission('partners.manage');
+    }
+
+    private function validatePartner(Request $request, ?Partner $partner = null): array
+    {
+        return $request->validate([
+            'name' => ['required', 'string', 'max:80'],
+            'description' => ['nullable', 'string', 'max:240'],
+            'website' => ['nullable', 'url', 'max:255'],
+            'discord_id' => ['nullable', 'string', 'max:120'],
+            'logo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+            'status' => ['required', 'in:lead,pending,active,warning,ended'],
+            'tier' => ['required', 'string', 'max:40'],
+            'category' => ['required', 'string', 'max:40'],
+            'score' => ['required', 'integer', 'min:0', 'max:100'],
+            'position' => ['required', 'integer', 'min:1', 'max:999'],
+            'notes' => ['nullable', 'string', 'max:1000'],
+            'is_featured' => ['nullable', 'boolean'],
+        ]);
     }
 }

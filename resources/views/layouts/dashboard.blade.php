@@ -77,6 +77,9 @@
                 <a class="{{ request()->routeIs('staff.hr*') ? 'active' : '' }}" href="{{ route('staff.hr') }}">@include('components.icon', ['name' => 'user']) <span>HR & sollicitaties</span></a>
                 <a class="{{ request()->routeIs('staff.academy*') ? 'active' : '' }}" href="{{ route('staff.academy') }}">@include('components.icon', ['name' => 'book']) <span>Academy beheer</span></a>
             @endif
+            @if($currentUser->hasPermission('partners.manage') || in_array($currentUser->role->value, ['owner', 'management', 'partner_manager'], true))
+                <a class="{{ request()->is('mijn-cn/partners') ? 'active' : '' }}" href="{{ route('mijncn.module', 'partners') }}">@include('components.icon', ['name' => 'community']) <span>Projecten & partners</span></a>
+            @endif
             @if($currentUser->hasPermission('content.manage'))
                 <a class="{{ request()->routeIs('staff.news.*') ? 'active' : '' }}" href="{{ route('staff.news.index') }}">@include('components.icon', ['name' => 'book']) <span>Nieuwsbeheer</span></a>
             @endif

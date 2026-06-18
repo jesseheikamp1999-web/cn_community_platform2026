@@ -15,6 +15,7 @@ use App\Services\TaskWorkflowService;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
@@ -312,6 +313,66 @@ class MijnCnController extends Controller
         $partner->delete();
 
         return back()->with('success', 'Project verwijderd uit de ranglijst.');
+    }
+
+    public function upgradePartnerRankings(Request $request): RedirectResponse
+    {
+        abort_unless($this->canManagePartners($request->user()), 403);
+
+        $missingColumns = collect(['description', 'category', 'score', 'position', 'is_featured'])
+            ->reject(fn (string $column) => Schema::hasColumn('partners', $column));
+
+        if ($missingColumns->isNotEmpty()) {
+            Schema::table('partners', function (Blueprint $table) use ($missingColumns) {
+                if ($missingColumns->contains('description')) {
+                    $table->text('description')->nullable();
+                }
+                if ($missingColumns->contains('category')) {
+                    $table->string('category')->default('server');
+                }
+                if ($missingColumns->contains('score')) {
+                    $table->unsignedSmallInteger('score')->default(0);
+                }
+                if ($missingColumns->contains('position')) {
+                    $table->unsignedSmallInteger('position')->default(100)->index();
+                }
+                if ($missingColumns->contains('is_featured')) {
+                    $table->boolean('is_featured')->default(true);
+                }
+            });
+        }
+
+        $projects = [
+            ['Stumpertjes', 'Creatieve Discord-community met actieve leden.', 'https://discord.gg/dG7HRqVa9J', 94, 1],
+            ['Game On', 'Gamingproject met focus op events en gezelligheid.', 'https://discord.gg/dG7HRqVa9J', 91, 2],
+            ['NightMC', 'Minecraft-server met een herkenbare community.', 'https://discord.gg/dG7HRqVa9J', 89, 3],
+            ['ValoraMC', 'Serverproject met groeiende spelersgroep.', 'https://discord.gg/dG7HRqVa9J', 87, 4],
+            ['GamingTubex', 'Communityproject rond content en gaming.', 'https://discord.gg/dG7HRqVa9J', 85, 5],
+            ['NL & BE Roleplay', 'Roleplay-community voor Nederlandse en Belgische spelers.', 'https://discord.gg/dG7HRqVa9J', 83, 6],
+            ['PixelForge', 'Creatieve server voor makers en developers.', 'https://discord.gg/dG7HRqVa9J', 81, 7],
+            ['Creative Hub', 'Partnerproject voor design, bouw en content.', 'https://discord.gg/dG7HRqVa9J', 79, 8],
+            ['Nexus', 'Communityserver met focus op samenwerking.', 'https://discord.gg/dG7HRqVa9J', 77, 9],
+            ['Studio Nova', 'Creatieve partner voor community-identiteit.', 'https://discord.gg/dG7HRqVa9J', 75, 10],
+        ];
+
+        foreach ($projects as [$name, $description, $website, $score, $position]) {
+            Partner::updateOrCreate(
+                ['slug' => Str::slug($name)],
+                [
+                    'name' => $name,
+                    'description' => $description,
+                    'website' => $website,
+                    'status' => 'active',
+                    'tier' => 'community',
+                    'category' => 'server',
+                    'score' => $score,
+                    'position' => $position,
+                    'is_featured' => true,
+                ]
+            );
+        }
+
+        return back()->with('success', 'Partner-ranglijst is bijgewerkt. Je kunt nu score, positie, categorie en homepage-weergave beheren.');
     }
 
     private function modules(): array

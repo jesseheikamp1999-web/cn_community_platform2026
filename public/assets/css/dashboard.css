@@ -928,6 +928,22 @@
     color: #a8151c;
 }
 
+.partner-upgrade-alert {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+}
+
+.partner-upgrade-alert form {
+    flex: none;
+    margin: 0;
+}
+
+.partner-upgrade-alert .button {
+    box-shadow: none;
+}
+
 .birthday-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));

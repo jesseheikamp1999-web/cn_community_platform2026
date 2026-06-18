@@ -87,6 +87,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/mijn-cn/nominaties/{nomination}/bewerken', [AwardActionController::class, 'editProfile'])->name('mijncn.nominations.edit');
     Route::put('/mijn-cn/nominaties/{nomination}', [AwardActionController::class, 'updateProfile'])->name('mijncn.nominations.update');
     Route::post('/mijn-cn/partners', [MijnCnController::class, 'storePartner'])->name('mijncn.partners.store');
+    Route::post('/mijn-cn/partners/database-bijwerken', [MijnCnController::class, 'upgradePartnerRankings'])->name('mijncn.partners.upgrade');
     Route::put('/mijn-cn/partners/{partner}', [MijnCnController::class, 'updatePartner'])->name('mijncn.partners.update');
     Route::delete('/mijn-cn/partners/{partner}', [MijnCnController::class, 'destroyPartner'])->name('mijncn.partners.destroy');
     Route::post('/mijn-cn/afwezigheid', [MijnCnController::class, 'reportAbsence'])->name('mijncn.absences.store');

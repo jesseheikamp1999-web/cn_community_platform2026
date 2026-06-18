@@ -879,6 +879,33 @@ class PlatformTest extends TestCase
             ->assertSee('99');
     }
 
+    public function test_owner_can_upgrade_partner_rankings_from_mijncn_without_artisan(): void
+    {
+        $owner = User::factory()->create(['role' => \App\Enums\UserRole::Owner]);
+
+        $this->actingAs($owner)
+            ->post(route('mijncn.partners.upgrade'))
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $this->assertTrue(Schema::hasColumns('partners', ['description', 'category', 'score', 'position', 'is_featured']));
+        $this->assertDatabaseHas('partners', [
+            'slug' => 'nightmc',
+            'score' => 89,
+            'position' => 3,
+            'is_featured' => true,
+        ]);
+    }
+
+    public function test_member_cannot_upgrade_partner_rankings(): void
+    {
+        $member = User::factory()->create(['role' => \App\Enums\UserRole::Member]);
+
+        $this->actingAs($member)
+            ->post(route('mijncn.partners.upgrade'))
+            ->assertForbidden();
+    }
+
     public function test_birthday_notifications_are_sent_once_to_mijncn_and_discord(): void
     {
         Http::fake();

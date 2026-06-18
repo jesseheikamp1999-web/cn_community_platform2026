@@ -353,7 +353,10 @@
     @elseif($module === 'partners')
         @php($rankingReady = $partnerRankingsReady ?? true)
         @unless($rankingReady)
-            <div class="module-alert error">Partners werkt nu in basisbeheer. Na het draaien van <strong>php artisan migrate</strong> kun je ook score, positie, categorie, omschrijving en homepage-weergave beheren.</div>
+            <div class="module-alert error partner-upgrade-alert">
+                <span>Partners werkt nu in basisbeheer. Klik op database bijwerken om score, positie, categorie, omschrijving en homepage-weergave aan te zetten.</span>
+                <form method="post" action="{{ route('mijncn.partners.upgrade') }}">@csrf<button class="button button-primary button-small">Database bijwerken</button></form>
+            </div>
         @endunless
         <section class="module-card partner-manager">
             <div class="module-card-heading">

@@ -76,6 +76,10 @@
     grid-area: 1 / 1;
 }
 
+.user-avatar-wrap > [hidden] {
+    display: none !important;
+}
+
 .sidebar-avatar,
 .sidebar-avatar .user-avatar-wrap,
 .topbar-user > .user-avatar-image,

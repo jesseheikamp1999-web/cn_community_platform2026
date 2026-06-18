@@ -351,6 +351,9 @@
         </section>
 
     @elseif($module === 'partners')
+        @unless($partnerRankingsReady ?? true)
+            <div class="module-alert error">De partner-ranglijst draait tijdelijk in compatibiliteitsmodus. Voer de nieuwste migrations uit om score, positie, categorie en homepage-weergave te beheren.</div>
+        @endunless
         <section class="module-card partner-manager">
             <div class="module-card-heading">
                 <div><span>RANGLIJST</span><h2>Nieuw project toevoegen</h2></div>

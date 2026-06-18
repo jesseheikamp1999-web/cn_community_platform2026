@@ -11,11 +11,21 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('partners', function (Blueprint $table) {
-            $table->text('description')->nullable()->after('slug');
-            $table->string('category')->default('server')->after('tier');
-            $table->unsignedSmallInteger('score')->default(0)->after('category');
-            $table->unsignedSmallInteger('position')->default(100)->index()->after('score');
-            $table->boolean('is_featured')->default(true)->after('position');
+            if (!Schema::hasColumn('partners', 'description')) {
+                $table->text('description')->nullable()->after('slug');
+            }
+            if (!Schema::hasColumn('partners', 'category')) {
+                $table->string('category')->default('server')->after('tier');
+            }
+            if (!Schema::hasColumn('partners', 'score')) {
+                $table->unsignedSmallInteger('score')->default(0)->after('category');
+            }
+            if (!Schema::hasColumn('partners', 'position')) {
+                $table->unsignedSmallInteger('position')->default(100)->index()->after('score');
+            }
+            if (!Schema::hasColumn('partners', 'is_featured')) {
+                $table->boolean('is_featured')->default(true)->after('position');
+            }
         });
 
         $projects = [
@@ -54,7 +64,11 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('partners', function (Blueprint $table) {
-            $table->dropColumn(['description', 'category', 'score', 'position', 'is_featured']);
+            foreach (['description', 'category', 'score', 'position', 'is_featured'] as $column) {
+                if (Schema::hasColumn('partners', $column)) {
+                    $table->dropColumn($column);
+                }
+            }
         });
     }
 };

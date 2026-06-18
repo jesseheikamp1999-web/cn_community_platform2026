@@ -153,10 +153,15 @@ class MijnCnController extends Controller
             $data['communitySearch'] = $search;
         } elseif ($module === 'partners') {
             abort_unless($this->canManagePartners($user), 403);
-            $data['partners'] = Partner::orderBy('position')
-                ->orderByDesc('score')
-                ->orderBy('name')
-                ->get();
+            $partnerQuery = Partner::query();
+            if (Schema::hasColumn('partners', 'position')) {
+                $partnerQuery->orderBy('position');
+            }
+            if (Schema::hasColumn('partners', 'score')) {
+                $partnerQuery->orderByDesc('score');
+            }
+            $data['partners'] = $partnerQuery->orderBy('name')->get();
+            $data['partnerRankingsReady'] = Schema::hasColumns('partners', ['description', 'category', 'score', 'position', 'is_featured']);
         }
 
         return view('dashboard.module', $data);
@@ -267,12 +272,14 @@ class MijnCnController extends Controller
         abort_unless($this->canManagePartners($request->user()), 403);
         $data = $this->validatePartner($request);
         $data['slug'] = Str::slug($data['name']);
-        $data['is_featured'] = $request->boolean('is_featured');
+        if (Schema::hasColumn('partners', 'is_featured')) {
+            $data['is_featured'] = $request->boolean('is_featured');
+        }
         if ($request->hasFile('logo')) {
             $data['logo'] = $request->file('logo')->store('partners', 'public');
         }
 
-        Partner::create($data);
+        Partner::create($this->filterPartnerData($data));
 
         return back()->with('success', 'Project toegevoegd aan de ranglijst.');
     }
@@ -282,14 +289,16 @@ class MijnCnController extends Controller
         abort_unless($this->canManagePartners($request->user()), 403);
         $data = $this->validatePartner($request, $partner);
         $data['slug'] = Str::slug($data['name']);
-        $data['is_featured'] = $request->boolean('is_featured');
+        if (Schema::hasColumn('partners', 'is_featured')) {
+            $data['is_featured'] = $request->boolean('is_featured');
+        }
         if ($request->hasFile('logo')) {
             if ($partner->logo && !str_starts_with($partner->logo, 'http')) {
                 Storage::disk('public')->delete($partner->logo);
             }
             $data['logo'] = $request->file('logo')->store('partners', 'public');
         }
-        $partner->update($data);
+        $partner->update($this->filterPartnerData($data));
 
         return back()->with('success', 'Project bijgewerkt.');
     }
@@ -318,19 +327,35 @@ class MijnCnController extends Controller
 
     private function validatePartner(Request $request, ?Partner $partner = null): array
     {
-        return $request->validate([
+        $rules = [
             'name' => ['required', 'string', 'max:80'],
-            'description' => ['nullable', 'string', 'max:240'],
             'website' => ['nullable', 'url', 'max:255'],
             'discord_id' => ['nullable', 'string', 'max:120'],
             'logo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
             'status' => ['required', 'in:lead,pending,active,warning,ended'],
             'tier' => ['required', 'string', 'max:40'],
+            'notes' => ['nullable', 'string', 'max:1000'],
+        ];
+
+        foreach ([
+            'description' => ['nullable', 'string', 'max:240'],
             'category' => ['required', 'string', 'max:40'],
             'score' => ['required', 'integer', 'min:0', 'max:100'],
             'position' => ['required', 'integer', 'min:1', 'max:999'],
-            'notes' => ['nullable', 'string', 'max:1000'],
             'is_featured' => ['nullable', 'boolean'],
-        ]);
+        ] as $column => $rule) {
+            if (Schema::hasColumn('partners', $column)) {
+                $rules[$column] = $rule;
+            }
+        }
+
+        return $request->validate($rules);
+    }
+
+    private function filterPartnerData(array $data): array
+    {
+        $columns = array_flip(Schema::getColumnListing('partners'));
+
+        return array_intersect_key($data, $columns);
     }
 }

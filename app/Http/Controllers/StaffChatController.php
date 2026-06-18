@@ -530,7 +530,7 @@ class StaffChatController extends Controller
             'mine' => $message->sender_id === $viewer->id,
             'sender' => $message->sender->name,
             'avatar' => $message->sender->discord_avatar_url,
-            'initials' => strtoupper(substr($message->sender->name, 0, 2)),
+            'initials' => Str::upper(Str::substr($message->sender->name, 0, 2)),
             'time' => $message->created_at->format('H:i'),
             'date' => $message->created_at->translatedFormat('d M Y'),
             'reply' => $message->replyTo ? [

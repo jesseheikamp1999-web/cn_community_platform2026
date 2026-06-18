@@ -1680,4 +1680,85 @@ class PlatformTest extends TestCase
         $this->actingAs($owner)->post(route('mijncn.chat.install'))
             ->assertRedirect(route('mijncn.chat'));
     }
+
+    public function test_member_can_manage_their_nomination_profile_with_safe_markdown(): void
+    {
+        Storage::fake('public');
+        $owner = User::factory()->create(['discord_id' => 'nomination-owner']);
+        $edition = AwardEdition::create([
+            'name' => 'CN Awards 2026',
+            'slug' => 'profile-editor-awards',
+            'type' => 'cn_awards',
+            'year' => 2026,
+        ]);
+        $category = AwardCategory::create([
+            'award_edition_id' => $edition->id,
+            'name' => 'Beste Discord Community',
+            'slug' => 'beste-discord-community-profile',
+        ]);
+        $nomination = Nomination::create([
+            'award_category_id' => $category->id,
+            'user_id' => $owner->id,
+            'nominee_name' => 'Oude Naam',
+            'motivation' => 'Een uitgebreide motivatie voor de oude naam.',
+            'status' => 'approved',
+        ]);
+
+        $this->actingAs($owner)->put(route('mijncn.nominations.update', $nomination), [
+            'nominee_name' => 'Maatjescraft',
+            'motivation' => "# Welkom\n**Sterke community** met duidelijke events. <script>alert(1)</script>",
+            'evidence_text' => '- Actieve chats',
+            'website_url' => 'https://maatjescraft.example',
+            'discord_invite' => 'https://discord.gg/test',
+            'logo_upload' => UploadedFile::fake()->createWithContent(
+                'logo.png',
+                base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=')
+            ),
+            'banner_upload' => UploadedFile::fake()->createWithContent(
+                'banner.png',
+                base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=')
+            ),
+        ])->assertRedirect(route('mijncn.nominations.edit', $nomination));
+
+        $nomination->refresh();
+        $this->assertSame('Maatjescraft', $nomination->nominee_name);
+        $this->assertNotNull($nomination->logo_url);
+        $this->assertNotNull($nomination->banner_url);
+
+        $this->actingAs($owner)
+            ->get(route('awards.nomination', $nomination))
+            ->assertOk()
+            ->assertSee('<h2>Welkom</h2>', false)
+            ->assertSee('<strong>Sterke community</strong>', false)
+            ->assertSee('&lt;script&gt;alert(1)&lt;/script&gt;', false)
+            ->assertDontSee('<script>alert(1)</script>', false);
+    }
+
+    public function test_member_cannot_manage_someone_elses_nomination_profile(): void
+    {
+        $owner = User::factory()->create(['discord_id' => 'nomination-owner-two']);
+        $other = User::factory()->create(['discord_id' => 'nomination-other']);
+        $edition = AwardEdition::create([
+            'name' => 'CN Awards 2026',
+            'slug' => 'profile-editor-awards-forbidden',
+            'type' => 'cn_awards',
+            'year' => 2026,
+        ]);
+        $category = AwardCategory::create([
+            'award_edition_id' => $edition->id,
+            'name' => 'Beste Project',
+            'slug' => 'beste-project-profile',
+        ]);
+        $nomination = Nomination::create([
+            'award_category_id' => $category->id,
+            'user_id' => $owner->id,
+            'nominee_name' => 'Project',
+            'motivation' => 'Een uitgebreide motivatie voor dit project.',
+            'status' => 'pending',
+        ]);
+
+        $this->actingAs($other)
+            ->get(route('mijncn.nominations.edit', $nomination))
+            ->assertForbidden();
+    }
 }

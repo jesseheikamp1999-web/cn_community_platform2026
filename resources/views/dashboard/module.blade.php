@@ -116,7 +116,26 @@
             <div class="module-card-heading"><div><span>CN AWARDS</span><h2>{{ $nominations->total() }} nominaties</h2></div></div>
             <div class="module-list">
                 @forelse($nominations as $nomination)
-                    <article><div class="list-avatar">{{ strtoupper(substr($nomination->nominee_name, 0, 2)) }}</div><div><strong>{{ $nomination->nominee_name }}</strong><p>{{ $nomination->category->name }} · {{ $nomination->category->edition->name }}</p></div><span class="status status-{{ $nomination->status }}">{{ ucfirst($nomination->status) }}</span></article>
+                    <article>
+                        <div class="list-avatar">
+                            @if($nomination->logo_url)
+                                <img src="{{ $nomination->logo_url }}" alt="{{ $nomination->nominee_name }}">
+                            @else
+                                {{ strtoupper(substr($nomination->nominee_name, 0, 2)) }}
+                            @endif
+                        </div>
+                        <div>
+                            <strong>{{ $nomination->nominee_name }}</strong>
+                            <p>{{ $nomination->category->name }} · {{ $nomination->category->edition->name }}</p>
+                            <div class="module-inline-actions">
+                                <a class="text-action" href="{{ route('mijncn.nominations.edit', $nomination) }}">Beheer profiel</a>
+                                @if(in_array($nomination->status, ['approved', 'finalist', 'winner'], true))
+                                    <a class="text-action muted" href="{{ route('awards.nomination', $nomination) }}" target="_blank" rel="noopener">Publiek bekijken</a>
+                                @endif
+                            </div>
+                        </div>
+                        <span class="status status-{{ $nomination->status }}">{{ ucfirst($nomination->status) }}</span>
+                    </article>
                 @empty
                     <div class="module-empty"><h3>Nog geen nominaties</h3><p>Geef iemand uit de community het podium dat diegene verdient.</p><a class="button button-primary button-small" href="{{ route('awards') }}">Iemand nomineren</a></div>
                 @endforelse

@@ -84,6 +84,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/mijn-cn/nomi/vragen', [MijnCnController::class, 'askNomi'])->middleware('throttle:10,1')->name('mijncn.nomi.ask');
     Route::post('/mijn-cn/taken/{task}/claimen', [MijnCnController::class, 'claimTask'])->name('mijncn.tasks.claim');
     Route::post('/mijn-cn/taken/{task}/voltooien', [MijnCnController::class, 'completeTask'])->name('mijncn.tasks.complete');
+    Route::get('/mijn-cn/nominaties/{nomination}/bewerken', [AwardActionController::class, 'editProfile'])->name('mijncn.nominations.edit');
+    Route::put('/mijn-cn/nominaties/{nomination}', [AwardActionController::class, 'updateProfile'])->name('mijncn.nominations.update');
     Route::post('/mijn-cn/partners', [MijnCnController::class, 'storePartner'])->name('mijncn.partners.store');
     Route::put('/mijn-cn/partners/{partner}', [MijnCnController::class, 'updatePartner'])->name('mijncn.partners.update');
     Route::delete('/mijn-cn/partners/{partner}', [MijnCnController::class, 'destroyPartner'])->name('mijncn.partners.destroy');

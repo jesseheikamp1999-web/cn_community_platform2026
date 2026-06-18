@@ -1033,9 +1033,42 @@
 }
 
 .nominee-profile-page article > p,
-.nominee-evidence p {
+.nominee-evidence p,
+.nominee-profile-page .markdown-content {
     color: #656a73;
     line-height: 1.8;
+}
+
+.nominee-profile-page .markdown-content h2,
+.nominee-profile-page .markdown-content h3,
+.nominee-profile-page .markdown-content h4 {
+    margin: 22px 0 10px;
+    color: #111318;
+    line-height: 1.15;
+}
+
+.nominee-profile-page .markdown-content h2 { font-size: 30px; }
+.nominee-profile-page .markdown-content h3 { font-size: 24px; }
+.nominee-profile-page .markdown-content h4 { font-size: 19px; }
+
+.nominee-profile-page .markdown-content p,
+.nominee-profile-page .markdown-content ul {
+    margin: 0 0 16px;
+}
+
+.nominee-profile-page .markdown-content ul {
+    padding-left: 21px;
+}
+
+.nominee-profile-page .markdown-content strong {
+    color: #111318;
+    font-weight: 850;
+}
+
+.nominee-profile-page .markdown-content a {
+    color: #df1822;
+    font-weight: 800;
+    text-decoration: none;
 }
 
 .nominee-evidence {

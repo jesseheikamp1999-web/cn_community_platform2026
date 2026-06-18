@@ -351,12 +351,13 @@
         </section>
 
     @elseif($module === 'partners')
-        @unless($partnerRankingsReady ?? true)
-            <div class="module-alert error">De partner-ranglijst draait tijdelijk in compatibiliteitsmodus. Voer de nieuwste migrations uit om score, positie, categorie en homepage-weergave te beheren.</div>
+        @php($rankingReady = $partnerRankingsReady ?? true)
+        @unless($rankingReady)
+            <div class="module-alert error">Partners werkt nu in basisbeheer. Na het draaien van <strong>php artisan migrate</strong> kun je ook score, positie, categorie, omschrijving en homepage-weergave beheren.</div>
         @endunless
         <section class="module-card partner-manager">
             <div class="module-card-heading">
-                <div><span>RANGLIJST</span><h2>Nieuw project toevoegen</h2></div>
+                <div><span>{{ $rankingReady ? 'RANGLIJST' : 'BASISBEHEER' }}</span><h2>Nieuw project toevoegen</h2></div>
                 <a class="text-action" href="{{ route('partners') }}">Publieke pagina bekijken</a>
             </div>
             <form class="module-form partner-form" method="post" action="{{ route('mijncn.partners.store') }}" enctype="multipart/form-data">
@@ -364,16 +365,24 @@
                 <div class="module-form-grid">
                     <label>Naam<input name="name" required maxlength="80" placeholder="Bijvoorbeeld NightMC"></label>
                     <label>Website of Discord link<input name="website" type="url" placeholder="https://discord.gg/..."></label>
-                    <label>Type<select name="category"><option value="server">Server</option><option value="project">Project</option><option value="partner">Partner</option><option value="creator">Creator</option></select></label>
+                    @if($rankingReady)
+                        <label>Type<select name="category"><option value="server">Server</option><option value="project">Project</option><option value="partner">Partner</option><option value="creator">Creator</option></select></label>
+                    @endif
                     <label>Status<select name="status"><option value="active">Actief</option><option value="pending">In aanvraag</option><option value="warning">Waarschuwing</option><option value="ended">Gestopt</option><option value="lead">Lead</option></select></label>
                     <label>Tier<input name="tier" value="community" required maxlength="40"></label>
-                    <label>Score<input name="score" type="number" min="0" max="100" value="80" required></label>
-                    <label>Positie<input name="position" type="number" min="1" max="999" value="{{ $partners->count() + 1 }}" required></label>
+                    @if($rankingReady)
+                        <label>Score<input name="score" type="number" min="0" max="100" value="80" required></label>
+                        <label>Positie<input name="position" type="number" min="1" max="999" value="{{ $partners->count() + 1 }}" required></label>
+                    @endif
                     <label>Afbeelding<input name="logo" type="file" accept="image/jpeg,image/png,image/webp"></label>
                 </div>
-                <label>Omschrijving<textarea name="description" rows="3" maxlength="240" placeholder="Korte omschrijving voor de publieke kaart."></textarea></label>
+                @if($rankingReady)
+                    <label>Omschrijving<textarea name="description" rows="3" maxlength="240" placeholder="Korte omschrijving voor de publieke kaart."></textarea></label>
+                @endif
                 <label>Interne notitie<textarea name="notes" rows="2" maxlength="1000" placeholder="Niet publiek zichtbaar."></textarea></label>
-                <label class="check-label"><input type="checkbox" name="is_featured" value="1" checked> Tonen op homepage</label>
+                @if($rankingReady)
+                    <label class="check-label"><input type="checkbox" name="is_featured" value="1" checked> Tonen op homepage</label>
+                @endif
                 <button class="button button-primary">Project toevoegen</button>
             </form>
         </section>
@@ -389,23 +398,35 @@
                                 <span>{{ strtoupper(substr($partner->name, 0, 1)) }}</span>
                             @endif
                         </div>
-                        <div><span>#{{ $partner->position }} · {{ strtoupper($partner->category) }}</span><h3>{{ $partner->name }}</h3><p>{{ $partner->score }}/100 punten</p></div>
+                        <div>
+                            <span>{{ $rankingReady ? '#'.($partner->position ?? $loop->iteration).' · '.strtoupper($partner->category ?? 'partner') : strtoupper($partner->status) }}</span>
+                            <h3>{{ $partner->name }}</h3>
+                            <p>{{ $rankingReady ? (($partner->score ?? 0).'/100 punten') : 'Basispartner' }}</p>
+                        </div>
                     </div>
                     <form class="module-form partner-form compact" method="post" action="{{ route('mijncn.partners.update', $partner) }}" enctype="multipart/form-data">
                         @csrf @method('PUT')
                         <input name="name" value="{{ $partner->name }}" required maxlength="80">
-                        <textarea name="description" rows="2" maxlength="240" placeholder="Omschrijving">{{ $partner->description }}</textarea>
+                        @if($rankingReady)
+                            <textarea name="description" rows="2" maxlength="240" placeholder="Omschrijving">{{ $partner->description }}</textarea>
+                        @endif
                         <input name="website" type="url" value="{{ $partner->website }}" placeholder="Website of Discord link">
                         <div class="module-form-grid small-grid">
-                            <select name="category"><option value="server" @selected($partner->category === 'server')>Server</option><option value="project" @selected($partner->category === 'project')>Project</option><option value="partner" @selected($partner->category === 'partner')>Partner</option><option value="creator" @selected($partner->category === 'creator')>Creator</option></select>
+                            @if($rankingReady)
+                                <select name="category"><option value="server" @selected($partner->category === 'server')>Server</option><option value="project" @selected($partner->category === 'project')>Project</option><option value="partner" @selected($partner->category === 'partner')>Partner</option><option value="creator" @selected($partner->category === 'creator')>Creator</option></select>
+                            @endif
                             <select name="status"><option value="active" @selected($partner->status === 'active')>Actief</option><option value="pending" @selected($partner->status === 'pending')>In aanvraag</option><option value="warning" @selected($partner->status === 'warning')>Waarschuwing</option><option value="ended" @selected($partner->status === 'ended')>Gestopt</option><option value="lead" @selected($partner->status === 'lead')>Lead</option></select>
                             <input name="tier" value="{{ $partner->tier }}" required maxlength="40">
-                            <input name="score" type="number" min="0" max="100" value="{{ $partner->score }}" required>
-                            <input name="position" type="number" min="1" max="999" value="{{ $partner->position }}" required>
+                            @if($rankingReady)
+                                <input name="score" type="number" min="0" max="100" value="{{ $partner->score }}" required>
+                                <input name="position" type="number" min="1" max="999" value="{{ $partner->position }}" required>
+                            @endif
                             <input name="logo" type="file" accept="image/jpeg,image/png,image/webp">
                         </div>
                         <textarea name="notes" rows="2" maxlength="1000" placeholder="Interne notitie">{{ $partner->notes }}</textarea>
-                        <label class="check-label"><input type="checkbox" name="is_featured" value="1" @checked($partner->is_featured)> Tonen op homepage</label>
+                        @if($rankingReady)
+                            <label class="check-label"><input type="checkbox" name="is_featured" value="1" @checked($partner->is_featured)> Tonen op homepage</label>
+                        @endif
                         <button class="button button-primary button-small">Opslaan</button>
                     </form>
                     <form method="post" action="{{ route('mijncn.partners.destroy', $partner) }}" onsubmit="return confirm('Project verwijderen?')">

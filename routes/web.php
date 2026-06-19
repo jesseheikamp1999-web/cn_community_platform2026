@@ -121,6 +121,7 @@ Route::prefix('staff')->name('staff.')->middleware(['auth', 'permission:staff.ac
     Route::post('/discord/leden-synchroniseren', [HrController::class, 'syncDiscordMembers'])->name('discord.members.sync');
     Route::middleware('permission:content.manage')->group(function () {
         Route::get('/nieuws', [ContentController::class, 'index'])->name('news.index');
+        Route::post('/nieuws/externe-feeds', [ContentController::class, 'syncExternal'])->name('news.sync-external');
         Route::get('/nieuws/nieuw', [ContentController::class, 'create'])->name('news.create');
         Route::post('/nieuws', [ContentController::class, 'store'])->name('news.store');
         Route::get('/nieuws/{article}/bewerken', [ContentController::class, 'edit'])->name('news.edit');

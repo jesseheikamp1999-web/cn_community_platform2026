@@ -23,6 +23,7 @@ use App\Services\DiscordService;
 use App\Services\CommunityAutomationService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
@@ -1403,6 +1404,44 @@ class PlatformTest extends TestCase
 
         $this->get(route('nieuws'))->assertOk()->assertSee($article->title);
         $this->get(route('news.show', $article))->assertOk()->assertSee($article->title);
+    }
+
+    public function test_homepage_mixes_cn_news_with_external_feeds(): void
+    {
+        Cache::put('external-news:allow-test-sync', true, now()->addMinute());
+        Cache::forget('external-news:last-sync');
+        config([
+            'news.feeds' => [
+                ['source' => 'NU.nl', 'url' => 'https://news.test/nu.xml', 'category' => 'Testnieuws'],
+                ['source' => 'NOS', 'url' => 'https://news.test/nos.xml', 'category' => 'Testnieuws'],
+            ],
+            'news.max_per_feed' => 1,
+        ]);
+        Http::fake([
+            'https://news.test/nu.xml' => Http::response('<?xml version="1.0"?><rss><channel><item><title>NU testbericht over Nederland</title><link>https://www.nu.nl/test</link><guid>nu-1</guid><description>Korte samenvatting vanuit NU.nl.</description><pubDate>Fri, 19 Jun 2025 10:00:00 GMT</pubDate></item></channel></rss>', 200),
+            'https://news.test/nos.xml' => Http::response('<?xml version="1.0"?><rss><channel><item><title>NOS testbericht voor CN</title><link>https://nos.nl/test</link><guid>nos-1</guid><description>Korte samenvatting vanuit NOS.</description><pubDate>Fri, 19 Jun 2025 09:00:00 GMT</pubDate></item></channel></rss>', 200),
+        ]);
+
+        Content::create([
+            'type' => 'news',
+            'title' => 'CN eigen nieuwsbericht',
+            'slug' => 'cn-eigen-nieuwsbericht',
+            'excerpt' => 'Eigen update vanuit de redactie.',
+            'body' => '<p>Eigen nieuws vanuit CN Community.</p>',
+            'status' => 'published',
+            'published_at' => now()->subHour(),
+        ]);
+
+        $this->get(route('home'))
+            ->assertOk()
+            ->assertSee('NU testbericht over Nederland')
+            ->assertSee('NOS testbericht voor CN')
+            ->assertSee('CN eigen nieuwsbericht');
+
+        $this->assertDatabaseHas('contents', [
+            'slug' => 'extern-nu-nl-'.substr(sha1('nu-1'), 0, 12),
+            'status' => 'published',
+        ]);
     }
 
     public function test_content_editor_can_create_news_but_member_cannot(): void

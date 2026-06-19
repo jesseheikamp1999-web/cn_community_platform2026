@@ -102,7 +102,7 @@
     <div class="news-grid">
         @forelse($news as $index => $item)
             <article class="news-card {{ $index === 0 ? 'large' : '' }}">
-                <div class="news-image gradient-{{ $index + 1 }}"><span>{{ $item->type === 'event' ? 'EVENT' : 'NIEUWS' }}</span></div>
+                <div class="news-image gradient-{{ $index + 1 }}" @if($item->cover_image) style="background-image:url('{{ $item->cover_image }}')" @endif><span>{{ data_get($item->meta, 'source', $item->type === 'event' ? 'EVENT' : 'CN NIEUWS') }}</span></div>
                 <div><small>{{ optional($item->published_at)->translatedFormat('d M Y') }}</small><h3>{{ $item->title }}</h3><p>{{ $item->excerpt }}</p><a href="{{ route('news.show', $item) }}">Lees verder &rarr;</a></div>
             </article>
         @empty

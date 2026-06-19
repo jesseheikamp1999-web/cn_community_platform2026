@@ -3,12 +3,15 @@
 namespace App\Http\Controllers;
 
 use App\Models\Content;
+use App\Services\ExternalNewsService;
 use Illuminate\View\View;
 
 class NewsController extends Controller
 {
-    public function index(): View
+    public function index(ExternalNewsService $externalNews): View
     {
+        $externalNews->syncIfStale();
+
         $featured = Content::published()->where('type', 'news')->latest('published_at')->first();
         $articles = Content::published()
             ->where('type', 'news')

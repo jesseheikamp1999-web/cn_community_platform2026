@@ -18,6 +18,14 @@ Artisan::command('cn:index-nomi-knowledge', function () {
     $this->info($count.' gepubliceerde kennisitems zijn voor Nomi geïndexeerd.');
 })->purpose('Werk Nomi bij met gepubliceerde CN Community-inhoud');
 
+Artisan::command('cn:sync-external-news', function () {
+    $result = app(\App\Services\ExternalNewsService::class)->sync(force: true);
+    $this->info($result['created'].' externe nieuwsberichten toegevoegd, '.$result['updated'].' bijgewerkt.');
+    foreach ($result['errors'] as $error) {
+        $this->warn($error);
+    }
+})->purpose('Haal externe nieuwsfeeds zoals NU.nl en NOS op');
+
 Artisan::command('cn:automate-community', function () {
     $result = app(\App\Services\CommunityAutomationService::class)->run();
     $this->info($result['award_phases'].' Awards-meldingen en '.$result['birthdays'].' verjaardagen verwerkt.');
@@ -44,4 +52,5 @@ Artisan::command('cn:cleanup-chat', function () {
 })->purpose('Verwijder oude, niet-vastgezette chatberichten volgens de bewaartermijn');
 
 Schedule::command('cn:automate-community')->everyMinute()->withoutOverlapping();
+Schedule::command('cn:sync-external-news')->everyThirtyMinutes()->withoutOverlapping();
 Schedule::command('cn:cleanup-chat')->dailyAt('03:30')->withoutOverlapping();

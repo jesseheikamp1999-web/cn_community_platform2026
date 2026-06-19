@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Staff;
 
 use App\Http\Controllers\Controller;
 use App\Models\Content;
+use App\Services\ExternalNewsService;
 use App\Services\NomiKnowledgeService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -18,6 +19,17 @@ class ContentController extends Controller
         $articles = Content::where('type', 'news')->with('author')->latest()->paginate(20);
 
         return view('staff.news.index', compact('articles'));
+    }
+
+    public function syncExternal(ExternalNewsService $externalNews): RedirectResponse
+    {
+        $result = $externalNews->sync(force: true);
+        $message = $result['created'].' externe nieuwsberichten toegevoegd, '.$result['updated'].' bijgewerkt.';
+        if (!empty($result['errors'])) {
+            return back()->with('error', $message.' Niet alle feeds konden worden gelezen: '.implode(' | ', $result['errors']));
+        }
+
+        return back()->with('success', $message);
     }
 
     public function create(): View

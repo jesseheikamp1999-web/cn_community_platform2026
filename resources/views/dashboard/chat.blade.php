@@ -186,6 +186,7 @@
                         <div class="chat-empty" data-chat-empty><strong>Begin het gesprek</strong><p>Stuur het eerste bericht naar {{ $selected->display_name }}.</p></div>
                     @endforelse
                 </div>
+                <button class="chat-jump-latest" type="button" data-chat-jump-latest hidden>Nieuwste berichten ↓</button>
                 <div class="chat-typing" data-typing-indicator hidden><i></i><i></i><i></i><span></span></div>
 
                 <form class="chat-composer" method="post" action="{{ route('chat.api.send') }}" enctype="multipart/form-data" data-chat-form>
@@ -389,6 +390,8 @@
         window.setTimeout(pollConversations, document.hidden ? 10000 : 5000);
     };
     messages.addEventListener('scroll', async () => {
+        const jumpLatest = document.querySelector('[data-chat-jump-latest]');
+        if (jumpLatest) jumpLatest.hidden = (messages.scrollHeight - messages.scrollTop - messages.clientHeight) < 180;
         if (messages.scrollTop > 50 || loadingOlder || !hasMore || !oldestId()) return;
         loadingOlder = true;
         const oldHeight = messages.scrollHeight;
@@ -402,6 +405,7 @@
             }
         } finally { loadingOlder = false; }
     });
+    document.querySelector('[data-chat-jump-latest]')?.addEventListener('click', () => scrollBottom());
     form.addEventListener('submit', async (event) => {
         event.preventDefault();
         const input = form.querySelector('[data-chat-input]');

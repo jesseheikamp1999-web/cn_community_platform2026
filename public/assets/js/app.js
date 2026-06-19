@@ -52,13 +52,16 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('[data-absence-planner]').forEach(form => {
         const startInput = form.querySelector('[data-absence-start]');
         const endInput = form.querySelector('[data-absence-end]');
+        const rangesInput = form.querySelector('[data-absence-ranges]');
         const summary = form.querySelector('[data-absence-summary]');
         const rangeText = form.querySelector('[data-absence-range]');
         const title = form.querySelector('[data-week-title]');
         const grid = form.querySelector('.absence-grid');
+        const existingAbsences = JSON.parse(form.dataset.existingAbsences || '[]');
         let weekStart = startOfWeek(new Date());
         let selecting = false;
         let anchor = null;
+        let nextSelectionState = true;
 
         const cells = () => [...form.querySelectorAll('[data-absence-cell]')];
         const pad = value => String(value).padStart(2, '0');
@@ -97,7 +100,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 date.setDate(weekStart.getDate() + day);
                 cell.dataset.date = dateValue(date);
                 cell.dataset.hour = pad(hour);
-                cell.classList.remove('selected');
+                cell.classList.remove('selected', 'past', 'booked');
+                cell.disabled = false;
+                markCellState(cell);
             });
             anchor = null;
             updateSelection();
@@ -111,7 +116,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const all = cells();
             const min = Math.min(from, to);
             const max = Math.max(from, to);
-            all.forEach((cell, index) => cell.classList.toggle('selected', index >= min && index <= max));
+            all.forEach((cell, index) => {
+                if (index < min || index > max || cell.disabled) return;
+                cell.classList.toggle('selected', nextSelectionState);
+            });
             updateSelection();
         }
 
@@ -120,17 +128,61 @@ document.addEventListener('DOMContentLoaded', () => {
             if (selected.length === 0) {
                 summary.textContent = 'Selecteer in het rooster wanneer je niet beschikbaar bent.';
                 rangeText.textContent = 'Nog geen periode geselecteerd';
+                rangesInput.value = '';
                 return;
             }
-            const first = selected[0];
-            const last = selected[selected.length - 1];
-            const start = new Date(`${first.dataset.date}T${first.dataset.hour}:00:00`);
-            const end = new Date(`${last.dataset.date}T${last.dataset.hour}:00:00`);
+            const ranges = selectedToRanges(selected);
+            startInput.value = inputValue(ranges[0].start);
+            endInput.value = inputValue(ranges[0].end);
+            rangesInput.value = JSON.stringify(ranges.map(range => ({
+                start: inputValue(range.start),
+                end: inputValue(range.end)
+            })));
+            summary.textContent = ranges.length === 1
+                ? `Afwezig van ${pretty(ranges[0].start)} tot ${pretty(ranges[0].end)}.`
+                : `${ranges.length} afwezigheidsperiodes geselecteerd.`;
+            rangeText.textContent = ranges.map(range => `${pretty(range.start)} - ${pretty(range.end)}`).join(' • ');
+        }
+
+        function cellStart(cell) {
+            return new Date(`${cell.dataset.date}T${cell.dataset.hour}:00:00`);
+        }
+
+        function selectedToRanges(selected) {
+            const ordered = [...selected].sort((a, b) => cellStart(a) - cellStart(b));
+            const ranges = [];
+            ordered.forEach(cell => {
+                const start = cellStart(cell);
+                const end = new Date(start);
+                end.setHours(end.getHours() + 1);
+                const previous = ranges[ranges.length - 1];
+                if (previous && previous.end.getTime() === start.getTime()) {
+                    previous.end = end;
+                } else {
+                    ranges.push({start, end});
+                }
+            });
+            return ranges;
+        }
+
+        function markCellState(cell) {
+            const start = cellStart(cell);
+            const end = new Date(start);
             end.setHours(end.getHours() + 1);
-            startInput.value = inputValue(start);
-            endInput.value = inputValue(end);
-            summary.textContent = `Afwezig van ${pretty(start)} tot ${pretty(end)}.`;
-            rangeText.textContent = `${pretty(start)} tot ${pretty(end)}`;
+            const booked = existingAbsences.some(absence => {
+                const absenceStart = new Date(absence.start);
+                const absenceEnd = new Date(absence.end);
+                return start < absenceEnd && end > absenceStart;
+            });
+            if (booked) {
+                cell.classList.add('booked');
+                cell.disabled = true;
+                return;
+            }
+            if (end <= new Date()) {
+                cell.classList.add('past');
+                cell.disabled = true;
+            }
         }
 
         form.querySelectorAll('[data-week-shift]').forEach(button => {
@@ -142,15 +194,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
         grid?.addEventListener('mousedown', event => {
             const cell = event.target.closest('[data-absence-cell]');
-            if (!cell) return;
+            if (!cell || cell.disabled) return;
             selecting = true;
             anchor = indexOf(cell);
+            nextSelectionState = !cell.classList.contains('selected');
             selectBetween(anchor, anchor);
         });
         grid?.addEventListener('mouseover', event => {
             if (!selecting || anchor === null) return;
             const cell = event.target.closest('[data-absence-cell]');
-            if (cell) selectBetween(anchor, indexOf(cell));
+            if (cell && !cell.disabled) selectBetween(anchor, indexOf(cell));
         });
         document.addEventListener('mouseup', () => selecting = false);
         form.querySelector('[data-absence-clear]')?.addEventListener('click', () => {
@@ -160,5 +213,21 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         refreshWeek();
+    });
+
+    document.querySelectorAll('[data-absence-tabs]').forEach(tabs => {
+        tabs.addEventListener('click', event => {
+            const button = event.target.closest('[data-absence-filter]');
+            if (!button) return;
+            tabs.querySelectorAll('button').forEach(item => item.classList.toggle('active', item === button));
+            const filter = button.dataset.absenceFilter;
+            document.querySelectorAll('[data-absence-row]').forEach(row => {
+                row.hidden = filter === 'now'
+                    ? row.dataset.absenceNow !== '1'
+                    : filter === 'week'
+                        ? row.dataset.absenceWeek !== '1'
+                        : false;
+            });
+        });
     });
 });

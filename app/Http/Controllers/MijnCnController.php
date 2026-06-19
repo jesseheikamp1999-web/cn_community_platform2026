@@ -93,6 +93,37 @@ class MijnCnController extends Controller
             abort_unless($user->role->value !== 'member', 403);
             $data['absences'] = $user->absenceRequests()->latest()->paginate(20);
             $data['currentAbsence'] = $user->absenceRequests()->current()->first();
+            $data['approvedAbsenceBlocks'] = $user->absenceRequests()
+                ->where('status', 'approved')
+                ->where(function ($query) {
+                    if (Schema::hasColumns('absence_requests', ['starts_at', 'ends_at'])) {
+                        $query->whereNotNull('starts_at')->where('ends_at', '>=', now()->subWeeks(2));
+                    } else {
+                        $query->whereDate('ends_on', '>=', today()->subWeeks(2));
+                    }
+                })
+                ->get()
+                ->map(fn (AbsenceRequest $absence) => [
+                    'start' => ($absence->starts_at ?? $absence->starts_on->startOfDay())->toIso8601String(),
+                    'end' => ($absence->ends_at ?? $absence->ends_on->endOfDay())->toIso8601String(),
+                    'reason' => $absence->reason,
+                ])
+                ->values();
+            $data['teamAbsenceUsers'] = User::whereNot('role', 'member')
+                ->with(['staffProfile', 'absenceRequests' => fn ($query) => $query
+                    ->where('status', 'approved')
+                    ->where(function ($period) {
+                        if (Schema::hasColumns('absence_requests', ['starts_at', 'ends_at'])) {
+                            $period->where('ends_at', '>=', now()->subWeek());
+                        } else {
+                            $period->whereDate('ends_on', '>=', today()->subWeek());
+                        }
+                    })
+                    ->orderByRaw(Schema::hasColumn('absence_requests', 'starts_at') ? 'COALESCE(starts_at, starts_on)' : 'starts_on')
+                    ->limit(12)])
+                ->orderByRaw("CASE role WHEN 'owner' THEN 1 WHEN 'management' THEN 2 WHEN 'admin' THEN 3 WHEN 'moderator' THEN 4 WHEN 'helper' THEN 5 WHEN 'jury' THEN 6 ELSE 7 END")
+                ->orderBy('name')
+                ->get();
         } elseif ($module === 'birthdays') {
             $isStaff = $user->role->value !== 'member';
             $data['birthdays'] = User::whereNotNull('birth_date')
@@ -264,26 +295,52 @@ class MijnCnController extends Controller
     {
         abort_unless($request->user()->role->value !== 'member', 403);
         $data = $request->validate([
-            'starts_at' => ['required', 'date'],
-            'ends_at' => ['required', 'date', 'after:starts_at'],
+            'starts_at' => ['nullable', 'date'],
+            'ends_at' => ['nullable', 'date', 'after:starts_at'],
+            'absence_ranges' => ['nullable', 'json'],
             'absence_type' => ['nullable', 'in:afwezig,druk,vakantie,school,werk,prive'],
             'reason' => ['required', 'string', 'max:1000'],
         ]);
 
-        $startsAt = Carbon::parse($data['starts_at']);
-        $endsAt = Carbon::parse($data['ends_at']);
-        $absence = [
-            'starts_on' => $startsAt->toDateString(),
-            'ends_on' => $endsAt->toDateString(),
-            'reason' => '['.($data['absence_type'] ?? 'afwezig').'] '.$data['reason'],
-            'status' => 'approved',
-        ];
-        if (Schema::hasColumns('absence_requests', ['starts_at', 'ends_at'])) {
-            $absence['starts_at'] = $startsAt;
-            $absence['ends_at'] = $endsAt;
+        $ranges = collect(json_decode((string) ($data['absence_ranges'] ?? '[]'), true))
+            ->filter(fn ($range) => is_array($range) && isset($range['start'], $range['end']))
+            ->map(fn ($range) => [
+                'start' => Carbon::parse($range['start']),
+                'end' => Carbon::parse($range['end']),
+            ])
+            ->filter(fn ($range) => $range['end']->gt($range['start']))
+            ->take(28)
+            ->values();
+
+        if ($ranges->isEmpty() && !empty($data['starts_at']) && !empty($data['ends_at'])) {
+            $ranges = collect([[
+                'start' => Carbon::parse($data['starts_at']),
+                'end' => Carbon::parse($data['ends_at']),
+            ]]);
         }
-        $request->user()->absenceRequests()->create($absence);
-        if ($startsAt->lte(now()) && $endsAt->gte(now())) {
+
+        if ($ranges->isEmpty()) {
+            return back()->withErrors(['starts_at' => 'Selecteer minimaal één afwezigheidsperiode.'])->withInput();
+        }
+
+        $created = 0;
+        foreach ($ranges as $range) {
+            $absence = [
+                'starts_on' => $range['start']->toDateString(),
+                'ends_on' => $range['end']->toDateString(),
+                'reason' => '['.($data['absence_type'] ?? 'afwezig').'] '.$data['reason'],
+                'status' => 'approved',
+            ];
+            if (Schema::hasColumns('absence_requests', ['starts_at', 'ends_at'])) {
+                $absence['starts_at'] = $range['start'];
+                $absence['ends_at'] = $range['end'];
+            }
+            $request->user()->absenceRequests()->create($absence);
+            $created++;
+        }
+
+        $currentlyAbsent = $ranges->contains(fn ($range) => $range['start']->lte(now()) && $range['end']->gte(now()));
+        if ($currentlyAbsent) {
             $request->user()->staffProfile()->updateOrCreate(
                 ['user_id' => $request->user()->id],
                 [
@@ -295,7 +352,9 @@ class MijnCnController extends Controller
             );
         }
 
-        return back()->with('success', 'Je staat voor deze periode op niet beschikbaar.');
+        return back()->with('success', $created === 1
+            ? 'Je staat voor deze periode op niet beschikbaar.'
+            : 'Je afwezigheid is voor '.$created.' periodes geregistreerd.');
     }
 
     public function cancelAbsence(Request $request, AbsenceRequest $absence): RedirectResponse

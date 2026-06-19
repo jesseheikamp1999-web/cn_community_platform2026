@@ -260,16 +260,22 @@
                             <button class="button button-secondary">Afwezigheid intrekken</button>
                         </form>
                     </div>
-                @else
-                    <form class="module-form absence-planner-form" method="post" action="{{ route('mijncn.absences.store') }}" data-absence-planner>
+                @endif
+                    <form class="module-form absence-planner-form" method="post" action="{{ route('mijncn.absences.store') }}" data-absence-planner data-existing-absences='@json($approvedAbsenceBlocks ?? [])'>
                         @csrf
                         <input type="hidden" name="starts_at" data-absence-start value="{{ old('starts_at', now()->format('Y-m-d\TH:i')) }}">
                         <input type="hidden" name="ends_at" data-absence-end value="{{ old('ends_at', now()->addHours(4)->format('Y-m-d\TH:i')) }}">
+                        <input type="hidden" name="absence_ranges" data-absence-ranges value="{{ old('absence_ranges') }}">
                         <div class="absence-planner">
                             <div class="absence-week-head">
                                 <button type="button" data-week-shift="-7" aria-label="Vorige week">&larr;</button>
                                 <strong data-week-title>{{ $weekStart->format('Y') }} - week {{ $weekStart->isoWeek() }}</strong>
                                 <button type="button" data-week-shift="7" aria-label="Volgende week">&rarr;</button>
+                            </div>
+                            <div class="absence-legend">
+                                <span><i class="past"></i> Voorbij</span>
+                                <span><i class="selected"></i> Geselecteerd</span>
+                                <span><i class="booked"></i> Al afwezig</span>
                             </div>
                             <div class="absence-hours">@for($hour = 0; $hour < 24; $hour++)<span>{{ $hour }}</span>@endfor</div>
                             <div class="absence-grid">
@@ -297,22 +303,53 @@
                         <p class="form-help">Tijdens deze periode staat op de publieke staffpagina automatisch "Niet beschikbaar".</p>
                         <button class="button button-primary">Afwezig melden</button>
                     </form>
-                @endif
             </section>
-            <section class="module-card">
-                <div class="module-card-heading"><div><span>HISTORIE</span><h2>Eerdere meldingen</h2></div></div>
-                <div class="module-list">
-                    @forelse($absences as $absence)
-                        <article>
-                            <div class="list-icon">@include('components.icon', ['name' => 'calendar'])</div>
-                            <div><strong>{{ ($absence->starts_at ?? $absence->starts_on)->translatedFormat('d M Y H:i') }} - {{ ($absence->ends_at ?? $absence->ends_on)->translatedFormat('d M Y H:i') }}</strong><p>{{ $absence->reason }}</p></div>
-                            <span class="status status-{{ $absence->status }}">{{ $absence->status === 'approved' ? 'Geregistreerd' : 'Ingetrokken' }}</span>
+            <section class="module-card absence-team-board">
+                <div class="module-card-heading">
+                    <div><span>TEAMROOSTER</span><h2>Wie is wanneer afwezig?</h2></div>
+                    <div class="absence-tabs" data-absence-tabs>
+                        <button type="button" class="active" data-absence-filter="all">Alles</button>
+                        <button type="button" data-absence-filter="now">Nu</button>
+                        <button type="button" data-absence-filter="week">Deze week</button>
+                    </div>
+                </div>
+                <div class="absence-team-list">
+                    @forelse(($teamAbsenceUsers ?? collect()) as $teamUser)
+                        @php($teamCurrent = $teamUser->absenceRequests->first(fn($absence) => ($absence->starts_at ?? $absence->starts_on->startOfDay())->lte(now()) && ($absence->ends_at ?? $absence->ends_on->endOfDay())->gte(now())))
+                        @php($teamFuture = $teamUser->absenceRequests->first(fn($absence) => ($absence->ends_at ?? $absence->ends_on->endOfDay())->gte(now())))
+                        <article data-absence-row data-absence-now="{{ $teamCurrent ? '1' : '0' }}" data-absence-week="{{ $teamFuture ? '1' : '0' }}">
+                            <div class="list-avatar">@include('components.user-avatar', ['user' => $teamUser])</div>
+                            <div>
+                                <strong>{{ $teamUser->name }}</strong>
+                                <span>{{ $teamUser->publicPosition() }}</span>
+                                @if($teamFuture)
+                                    <p>{{ ($teamFuture->starts_at ?? $teamFuture->starts_on)->translatedFormat('d M H:i') }} - {{ ($teamFuture->ends_at ?? $teamFuture->ends_on)->translatedFormat('d M H:i') }}</p>
+                                    <small>{{ $teamFuture->reason }}</small>
+                                @else
+                                    <p>Geen geplande afwezigheid.</p>
+                                @endif
+                            </div>
+                            <b class="{{ $teamCurrent ? 'is-away' : '' }}">{{ $teamCurrent ? 'Afwezig' : 'Beschikbaar' }}</b>
                         </article>
                     @empty
-                        <div class="module-empty"><h3>Nog geen afwezigheid gemeld</h3><p>Je eerdere periodes verschijnen hier.</p></div>
+                        <div class="module-empty"><h3>Geen teamdata</h3><p>Staffleden verschijnen hier zodra ze een profiel hebben.</p></div>
                     @endforelse
                 </div>
-                {{ $absences->links() }}
+                <details class="absence-history">
+                    <summary>Mijn eerdere meldingen</summary>
+                    <div class="module-list">
+                        @forelse($absences as $absence)
+                            <article>
+                                <div class="list-icon">@include('components.icon', ['name' => 'calendar'])</div>
+                                <div><strong>{{ ($absence->starts_at ?? $absence->starts_on)->translatedFormat('d M Y H:i') }} - {{ ($absence->ends_at ?? $absence->ends_on)->translatedFormat('d M Y H:i') }}</strong><p>{{ $absence->reason }}</p></div>
+                                <span class="status status-{{ $absence->status }}">{{ $absence->status === 'approved' ? 'Geregistreerd' : 'Ingetrokken' }}</span>
+                            </article>
+                        @empty
+                            <div class="module-empty"><h3>Nog geen afwezigheid gemeld</h3><p>Je eerdere periodes verschijnen hier.</p></div>
+                        @endforelse
+                    </div>
+                    {{ $absences->links() }}
+                </details>
             </section>
         </div>
 

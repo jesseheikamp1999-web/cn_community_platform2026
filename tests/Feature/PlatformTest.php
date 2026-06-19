@@ -1217,6 +1217,33 @@ class PlatformTest extends TestCase
         ])->assertForbidden();
     }
 
+    public function test_staff_can_report_multiple_absence_periods_at_once(): void
+    {
+        $staff = User::factory()->create(['role' => \App\Enums\UserRole::Moderator]);
+
+        $ranges = [
+            ['start' => now()->addDay()->setTime(10, 0)->format('Y-m-d\TH:i'), 'end' => now()->addDay()->setTime(13, 0)->format('Y-m-d\TH:i')],
+            ['start' => now()->addDays(2)->setTime(15, 0)->format('Y-m-d\TH:i'), 'end' => now()->addDays(2)->setTime(18, 0)->format('Y-m-d\TH:i')],
+        ];
+
+        $this->actingAs($staff)->post(route('mijncn.absences.store'), [
+            'absence_ranges' => json_encode($ranges),
+            'absence_type' => 'werk',
+            'reason' => 'Roosterblok',
+        ])->assertSessionHasNoErrors();
+
+        $this->assertDatabaseCount('absence_requests', 2);
+        foreach ($ranges as $range) {
+            $this->assertDatabaseHas('absence_requests', [
+                'user_id' => $staff->id,
+                'starts_at' => str_replace('T', ' ', $range['start']).':00',
+                'ends_at' => str_replace('T', ' ', $range['end']).':00',
+                'reason' => '[werk] Roosterblok',
+                'status' => 'approved',
+            ]);
+        }
+    }
+
     public function test_future_staff_absence_only_becomes_public_at_its_start_time(): void
     {
         $staff = User::factory()->create([

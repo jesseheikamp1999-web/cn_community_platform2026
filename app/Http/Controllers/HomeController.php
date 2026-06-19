@@ -29,7 +29,7 @@ class HomeController extends Controller
             'winners' => Nomination::where('status', 'winner')->with('category')->latest('updated_at')->limit(4)->get(),
             'partners' => $partners->limit(Schema::hasColumn('partners', 'is_featured') ? 10 : 6)->get(),
             'staff' => User::whereIn('role', ['helper', 'moderator', 'admin', 'management', 'owner'])
-                ->with('staffProfile')
+                ->with(['staffProfile', 'currentAbsence'])
                 ->withExists(['absenceRequests as is_currently_absent' => fn ($query) => $query->current()])
                 ->orderByRaw("CASE role
                     WHEN 'owner' THEN 1

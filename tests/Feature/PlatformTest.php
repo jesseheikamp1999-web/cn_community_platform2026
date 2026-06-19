@@ -1186,7 +1186,7 @@ class PlatformTest extends TestCase
 
         $this->get(route('staff'))
             ->assertOk()
-            ->assertSee('Niet beschikbaar')
+            ->assertSee('Afwezig tot')
             ->assertSee('Helper')
             ->assertSee('https://cdn.discordapp.com/avatars/123456789/avatarhash.png?size=256', false);
     }
@@ -1252,6 +1252,43 @@ class PlatformTest extends TestCase
             'Moderator Persoon',
             'Helper Persoon',
         ]);
+    }
+
+    public function test_staff_page_has_filters_role_badges_status_and_public_profiles(): void
+    {
+        $management = User::factory()->create(['name' => 'Melvin', 'role' => \App\Enums\UserRole::Management]);
+        $helper = User::factory()->create(['name' => 'Luca', 'role' => \App\Enums\UserRole::Helper]);
+        $management->staffProfile()->create([
+            'position' => 'Management',
+            'status' => 'active',
+            'joined_at' => today(),
+            'public_status' => 'busy',
+            'bio' => 'Bewaakt projecten en helpt het team groeien.',
+            'specialties' => ['Planning', 'HR'],
+            'discord_url' => 'https://discord.com/users/123',
+            'is_team_member_of_month' => true,
+        ]);
+        $helper->staffProfile()->create([
+            'position' => 'Helper',
+            'status' => 'active',
+            'joined_at' => today(),
+            'public_status' => 'active',
+            'bio' => 'Helpt leden op weg.',
+        ]);
+
+        $this->get(route('staff'))
+            ->assertOk()
+            ->assertSee('TEAM VAN DE MAAND')
+            ->assertSee('Bewaakt projecten')
+            ->assertSee('Planning')
+            ->assertSee('Druk')
+            ->assertSee('role-management', false)
+            ->assertSee('role-helper', false);
+
+        $this->get(route('staff', ['team' => 'helpers']))
+            ->assertOk()
+            ->assertSee('Luca')
+            ->assertDontSee('Melvin');
     }
 
     public function test_authenticated_user_can_log_out(): void

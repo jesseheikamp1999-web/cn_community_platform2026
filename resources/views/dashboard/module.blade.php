@@ -68,6 +68,24 @@
                         <label>Zichtbaarheid<select name="birthday_visibility"><option value="private" @selected($user->birthday_visibility === 'private')>Privé</option><option value="staff" @selected($user->birthday_visibility === 'staff')>Alleen staff</option><option value="community" @selected($user->birthday_visibility === 'community')>Community</option></select></label>
                     </div>
                     <label class="check-label"><input type="checkbox" name="birthday_notifications" value="1" @checked($user->birthday_notifications)> Stuur mij verjaardagsmeldingen</label>
+                    @if($user->role->value !== 'member')
+                        <div class="staff-profile-fields">
+                            <span class="dashboard-kicker">PUBLIEK STAFFPROFIEL</span>
+                            <div class="module-form-grid">
+                                <label>Publieke functie<input name="staff_position" maxlength="80" value="{{ old('staff_position', $user->publicPosition()) }}" placeholder="Bijvoorbeeld Moderator"></label>
+                                <label>Status<select name="staff_public_status">
+                                    @foreach(['active' => 'Beschikbaar', 'busy' => 'Druk', 'away' => 'Afwezig', 'vacation' => 'Vakantie'] as $value => $label)
+                                        <option value="{{ $value }}" @selected(old('staff_public_status', $user->staffProfile?->public_status ?? 'active') === $value)>{{ $label }}</option>
+                                    @endforeach
+                                </select></label>
+                            </div>
+                            <label>Staff bio<textarea name="staff_bio" rows="4" maxlength="500" placeholder="Korte bio voor de publieke staffkaart.">{{ old('staff_bio', $user->staffProfile?->bio) }}</textarea></label>
+                            <div class="module-form-grid">
+                                <label>Discord/profiel link<input type="url" name="staff_discord_url" value="{{ old('staff_discord_url', $user->staffProfile?->discord_url) }}" placeholder="https://discord.com/users/..."></label>
+                                <label>Specialisaties<input name="staff_specialties" value="{{ old('staff_specialties', collect($user->staffProfile?->specialties ?? [])->implode(', ')) }}" placeholder="Moderatie, Events, Support"></label>
+                            </div>
+                        </div>
+                    @endif
                     <button class="button button-primary">Instellingen opslaan</button>
                 </form>
             </section>
@@ -228,6 +246,7 @@
         </section>
 
     @elseif($module === 'absences')
+        @php($weekStart = now()->startOfWeek())
         <div class="module-columns absence-layout">
             <section class="module-card">
                 <div class="module-card-heading"><div><span>BESCHIKBAARHEID</span><h2>Afwezig melden</h2></div></div>
@@ -242,11 +261,37 @@
                         </form>
                     </div>
                 @else
-                    <form class="module-form" method="post" action="{{ route('mijncn.absences.store') }}">
+                    <form class="module-form absence-planner-form" method="post" action="{{ route('mijncn.absences.store') }}" data-absence-planner>
                         @csrf
+                        <input type="hidden" name="starts_at" data-absence-start value="{{ old('starts_at', now()->format('Y-m-d\TH:i')) }}">
+                        <input type="hidden" name="ends_at" data-absence-end value="{{ old('ends_at', now()->addHours(4)->format('Y-m-d\TH:i')) }}">
+                        <div class="absence-planner">
+                            <div class="absence-week-head">
+                                <button type="button" data-week-shift="-7" aria-label="Vorige week">&larr;</button>
+                                <strong data-week-title>{{ $weekStart->format('Y') }} - week {{ $weekStart->isoWeek() }}</strong>
+                                <button type="button" data-week-shift="7" aria-label="Volgende week">&rarr;</button>
+                            </div>
+                            <div class="absence-hours">@for($hour = 0; $hour < 24; $hour++)<span>{{ $hour }}</span>@endfor</div>
+                            <div class="absence-grid">
+                                @foreach(range(0, 6) as $dayOffset)
+                                    @php($day = $weekStart->copy()->addDays($dayOffset))
+                                    <div class="absence-day-label"><b>{{ $day->translatedFormat('D') }}</b><span>{{ $day->format('d/m') }}</span></div>
+                                    <div class="absence-hour-row">
+                                        @for($hour = 0; $hour < 24; $hour++)
+                                            <button type="button" data-absence-cell data-date="{{ $day->format('Y-m-d') }}" data-hour="{{ str_pad((string) $hour, 2, '0', STR_PAD_LEFT) }}" aria-label="{{ $day->translatedFormat('l') }} {{ $hour }}:00"></button>
+                                        @endfor
+                                    </div>
+                                @endforeach
+                            </div>
+                            <p class="absence-selection" data-absence-summary>Selecteer in het rooster wanneer je niet beschikbaar bent.</p>
+                        </div>
+                        <div class="absence-quick-actions">
+                            <button type="button" class="absence-action absent" data-absence-mode="absent">AFWEZIG</button>
+                            <button type="button" class="absence-action present" data-absence-clear>AANWEZIG</button>
+                        </div>
                         <div class="module-form-grid">
-                            <label>Vanaf<input type="datetime-local" name="starts_at" value="{{ old('starts_at', now()->format('Y-m-d\TH:i')) }}" required></label>
-                            <label>Tot en met<input type="datetime-local" name="ends_at" value="{{ old('ends_at', now()->addHours(4)->format('Y-m-d\TH:i')) }}" required></label>
+                            <label>Reden type<select name="absence_type"><option value="afwezig">Afwezig</option><option value="vakantie">Vakantie</option><option value="school">School</option><option value="werk">Werk</option><option value="druk">Druk</option><option value="prive">Privé</option></select></label>
+                            <label>Geselecteerde periode<small data-absence-range>Wordt gevuld vanuit het rooster</small></label>
                         </div>
                         <label>Reden<textarea name="reason" rows="5" maxlength="1000" required placeholder="Laat kort weten waarom en wanneer je weer bereikbaar bent.">{{ old('reason') }}</textarea></label>
                         <p class="form-help">Tijdens deze periode staat op de publieke staffpagina automatisch "Niet beschikbaar".</p>

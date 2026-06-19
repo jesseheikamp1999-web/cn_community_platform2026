@@ -122,14 +122,15 @@
     <div class="section-top"><div><span class="eyebrow"><i></i> DE MENSEN ACHTER CN</span><h2>Hier voor jou.<br><em>Elke dag opnieuw.</em></h2></div><a class="text-link" href="{{ route('staff') }}">Ontmoet het hele team →</a></div>
     <div class="people-grid">
         @forelse($staff as $staffMember)
-            @php($available = !$staffMember->is_currently_absent && ($staffMember->staffProfile?->status ?? 'active') !== 'inactive')
+            @php($statusKey = $staffMember->staffStatusKey())
             <article>
                 <div class="portrait">
                     @include('components.user-avatar', ['user' => $staffMember])
                 </div>
                 <h3>{{ $staffMember->name }}</h3>
                 <p>{{ $staffMember->publicPosition() }}</p>
-                <span class="{{ $available ? '' : 'unavailable' }}"><i></i> {{ $available ? 'Beschikbaar' : 'Niet beschikbaar' }}</span>
+                <b class="staff-role-badge compact role-{{ $staffMember->role->value }}">{{ $staffMember->role->label() }}</b>
+                <span class="{{ $statusKey === 'active' ? '' : 'unavailable' }}" title="{{ $staffMember->staffStatusLabel() }}"><i></i> {{ $staffMember->staffStatusLabel() }}</span>
             </article>
         @empty
             <div class="empty-state"><h3>Team wordt bijgewerkt</h3><p>De publieke staffprofielen verschijnen hier binnenkort.</p></div>

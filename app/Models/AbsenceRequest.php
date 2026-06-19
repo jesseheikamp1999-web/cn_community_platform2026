@@ -29,6 +29,13 @@ class AbsenceRequest extends Model
         return $this->belongsTo(User::class);
     }
 
+    public function displayEnd(): string
+    {
+        $end = $this->ends_at ?? $this->ends_on;
+
+        return $end?->translatedFormat($this->ends_at ? 'd M H:i' : 'd M Y') ?? 'onbekend';
+    }
+
     public function scopeCurrent(Builder $query): Builder
     {
         if (!Schema::hasColumns('absence_requests', ['starts_at', 'ends_at'])) {

@@ -42,28 +42,57 @@
             </form>
         </div>
     @else
+        @if($page === 'staff')
+            <div class="staff-filter-bar">
+                @foreach($staffFilters ?? [] as $filterKey => $filterLabel)
+                    <a class="{{ request('team', 'all') === $filterKey ? 'active' : '' }}" href="{{ $filterKey === 'all' ? route('staff') : route('staff', ['team' => $filterKey]) }}">{{ $filterLabel }}</a>
+                @endforeach
+            </div>
+            @if($teamMemberOfMonth && request('team', 'all') === 'all')
+                <article class="staff-month-card">
+                    <div class="staff-public-avatar">@include('components.user-avatar', ['user' => $teamMemberOfMonth])</div>
+                    <div>
+                        <span class="eyebrow"><i></i> TEAM VAN DE MAAND</span>
+                        <h2>{{ $teamMemberOfMonth->name }}</h2>
+                        <p>{{ $teamMemberOfMonth->staffProfile?->bio ?: $teamMemberOfMonth->profile_bio ?: 'Een zichtbaar voorbeeld voor de community.' }}</p>
+                    </div>
+                    <span class="staff-role-badge role-{{ $teamMemberOfMonth->role->value }}">{{ $teamMemberOfMonth->publicPosition() }}</span>
+                </article>
+            @endif
+        @endif
         <div class="content-grid {{ $page === 'staff' ? 'staff-public-grid' : '' }}">
             @forelse($items as $item)
                 @if($page === 'staff')
-                    @php($available = !$item->is_currently_absent && ($item->staffProfile?->status ?? 'active') !== 'inactive')
-                    <article class="content-card staff-public-card">
-                        <div class="staff-public-head">
-                            <div class="staff-public-avatar">
-                                @if($item->discord_avatar_url)
-                                    <img src="{{ $item->discord_avatar_url }}" alt="Discord-profielfoto van {{ $item->name }}">
-                                @else
-                                    <span>{{ strtoupper(substr($item->name, 0, 2)) }}</span>
-                                @endif
+                    @php($statusKey = $item->staffStatusKey())
+                    @php($specialties = collect($item->staffProfile?->specialties ?? [])->filter())
+                    <details class="content-card staff-public-card">
+                        <summary>
+                            <div class="staff-public-head">
+                                <div class="staff-public-avatar">@include('components.user-avatar', ['user' => $item])</div>
+                                <div>
+                                    <span class="eyebrow"><i></i> CN STAFF</span>
+                                    <h3>{{ $item->name }}</h3>
+                                    <div class="staff-public-role">{{ $item->publicPosition() }}</div>
+                                </div>
+                            </div>
+                            <span class="staff-role-badge role-{{ $item->role->value }}">{{ $item->role->label() }}</span>
+                        </summary>
+                        <p>{{ $item->staffProfile?->bio ?: $item->profile_bio ?: 'Staat klaar voor de community en helpt CN verder groeien.' }}</p>
+                        @if($specialties->isNotEmpty())
+                            <div class="staff-specialties">@foreach($specialties as $specialty)<span>{{ $specialty }}</span>@endforeach</div>
+                        @endif
+                        <div class="staff-mini-profile">
+                            <div>
+                                <strong>Functie</strong>
+                                <span>{{ $item->publicPosition() }}</span>
                             </div>
                             <div>
-                                <span class="eyebrow"><i></i> CN STAFF</span>
-                                <h3>{{ $item->name }}</h3>
-                                <div class="staff-public-role">{{ $item->publicPosition() }}</div>
+                                <strong>Discord</strong>
+                                @if($item->staffProfile?->discord_url)<a href="{{ $item->staffProfile->discord_url }}" target="_blank" rel="noopener noreferrer">Open profiel</a>@else<span>{{ '@'.($item->discord_username ?: $item->name) }}</span>@endif
                             </div>
                         </div>
-                        <p>{{ $item->staffProfile?->bio ?: $item->profile_bio ?: 'Staat klaar voor de community en helpt CN verder groeien.' }}</p>
-                        <span class="availability {{ $available ? '' : 'unavailable' }}">{{ $available ? 'Beschikbaar' : 'Niet beschikbaar' }}</span>
-                    </article>
+                        <span class="availability staff-status status-{{ $statusKey }}" title="{{ $item->staffStatusLabel() }}">{{ $item->staffStatusLabel() }}</span>
+                    </details>
                 @elseif($page === 'partners')
                     <article class="content-card partner-public-card">
                         @if($item->logo_url)

@@ -81,6 +81,13 @@ class User extends Authenticatable
         return $this->hasMany(AbsenceRequest::class);
     }
 
+    public function currentAbsence(): HasOne
+    {
+        return $this->hasOne(AbsenceRequest::class)
+            ->current()
+            ->latest(Schema::hasColumn('absence_requests', 'ends_at') ? 'ends_at' : 'ends_on');
+    }
+
     public function isCurrentlyAbsent(): bool
     {
         return $this->absenceRequests()->current()->exists();
@@ -99,6 +106,29 @@ class User extends Authenticatable
         }
 
         return $position;
+    }
+
+    public function staffStatusLabel(): string
+    {
+        if ($this->relationLoaded('currentAbsence') && $this->currentAbsence) {
+            return 'Afwezig tot '.$this->currentAbsence->displayEnd();
+        }
+
+        return match ($this->staffProfile?->public_status ?? 'active') {
+            'busy' => 'Druk',
+            'vacation' => 'Vakantie',
+            'away' => 'Afwezig',
+            default => 'Beschikbaar',
+        };
+    }
+
+    public function staffStatusKey(): string
+    {
+        if ($this->relationLoaded('currentAbsence') && $this->currentAbsence) {
+            return 'away';
+        }
+
+        return $this->staffProfile?->public_status ?? 'active';
     }
 
     public function badges(): BelongsToMany

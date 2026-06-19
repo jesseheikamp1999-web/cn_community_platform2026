@@ -170,14 +170,54 @@ class MijnCnController extends Controller
 
     public function updateProfile(Request $request): RedirectResponse
     {
-        $data = $request->validate([
+        $rules = [
             'profile_bio' => ['nullable', 'string', 'max:280'],
             'birth_date' => ['nullable', 'date', 'before:today'],
             'birthday_visibility' => ['required', 'in:private,staff,community'],
             'birthday_notifications' => ['nullable', 'boolean'],
-        ]);
+        ];
+
+        if ($request->user()->role->value !== 'member') {
+            $rules += [
+                'staff_bio' => ['nullable', 'string', 'max:500'],
+                'staff_position' => ['nullable', 'string', 'max:80'],
+                'staff_public_status' => ['nullable', 'in:active,busy,away,vacation'],
+                'staff_discord_url' => ['nullable', 'url', 'max:255'],
+                'staff_specialties' => ['nullable', 'string', 'max:255'],
+            ];
+        }
+
+        $data = $request->validate($rules);
         $data['birthday_notifications'] = $request->boolean('birthday_notifications');
-        $request->user()->update($data);
+        $request->user()->update(collect($data)->only([
+            'profile_bio', 'birth_date', 'birthday_visibility', 'birthday_notifications',
+        ])->all());
+
+        if ($request->user()->role->value !== 'member') {
+            $profileData = [
+                'position' => $data['staff_position'] ?: $request->user()->role->label(),
+                'bio' => $data['staff_bio'] ?? null,
+                'status' => in_array($data['staff_public_status'] ?? 'active', ['away', 'vacation'], true) ? 'absent' : 'active',
+                'joined_at' => $request->user()->staffProfile?->joined_at ?? $request->user()->created_at->toDateString(),
+            ];
+
+            if (Schema::hasColumn('staff_profiles', 'public_status')) {
+                $profileData['public_status'] = $data['staff_public_status'] ?? 'active';
+            }
+            if (Schema::hasColumn('staff_profiles', 'discord_url')) {
+                $profileData['discord_url'] = $data['staff_discord_url'] ?? null;
+            }
+            if (Schema::hasColumn('staff_profiles', 'specialties')) {
+                $profileData['specialties'] = collect(explode(',', (string) ($data['staff_specialties'] ?? '')))
+                    ->map(fn (string $specialty) => trim($specialty))
+                    ->filter()
+                    ->take(6)
+                    ->values()
+                    ->all();
+            }
+
+            $request->user()->staffProfile()->updateOrCreate(['user_id' => $request->user()->id], $profileData);
+        }
 
         return back()->with('success', 'Je MijnCN-profiel is bijgewerkt.');
     }
@@ -226,6 +266,7 @@ class MijnCnController extends Controller
         $data = $request->validate([
             'starts_at' => ['required', 'date'],
             'ends_at' => ['required', 'date', 'after:starts_at'],
+            'absence_type' => ['nullable', 'in:afwezig,druk,vakantie,school,werk,prive'],
             'reason' => ['required', 'string', 'max:1000'],
         ]);
 
@@ -234,7 +275,7 @@ class MijnCnController extends Controller
         $absence = [
             'starts_on' => $startsAt->toDateString(),
             'ends_on' => $endsAt->toDateString(),
-            'reason' => $data['reason'],
+            'reason' => '['.($data['absence_type'] ?? 'afwezig').'] '.$data['reason'],
             'status' => 'approved',
         ];
         if (Schema::hasColumns('absence_requests', ['starts_at', 'ends_at'])) {
@@ -248,6 +289,7 @@ class MijnCnController extends Controller
                 [
                     'position' => $request->user()->role->label(),
                     'status' => 'absent',
+                    ...(Schema::hasColumn('staff_profiles', 'public_status') ? ['public_status' => ($data['absence_type'] ?? 'afwezig') === 'vakantie' ? 'vacation' : 'away'] : []),
                     'joined_at' => $request->user()->created_at->toDateString(),
                 ]
             );
@@ -262,7 +304,10 @@ class MijnCnController extends Controller
         $absence->update(['status' => 'rejected']);
 
         if (!$request->user()->isCurrentlyAbsent()) {
-            $request->user()->staffProfile()->update(['status' => 'active']);
+            $request->user()->staffProfile()->update([
+                'status' => 'active',
+                ...(Schema::hasColumn('staff_profiles', 'public_status') ? ['public_status' => 'active'] : []),
+            ]);
         }
 
         return back()->with('success', 'Je afwezigheidsmelding is ingetrokken.');

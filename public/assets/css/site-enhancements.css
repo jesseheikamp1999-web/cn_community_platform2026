@@ -212,10 +212,60 @@
 
 .staff-public-card {
     min-height: 290px;
+    cursor: pointer;
 }
 
 .staff-public-grid {
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.staff-filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: -24px 0 28px;
+}
+
+.staff-filter-bar a {
+    padding: 10px 15px;
+    border: 1px solid #e2e4e8;
+    border-radius: 999px;
+    color: #6f737c;
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.staff-filter-bar a.active,
+.staff-filter-bar a:hover {
+    border-color: var(--red);
+    background: #fff1f2;
+    color: var(--red);
+}
+
+.staff-month-card {
+    display: grid;
+    grid-template-columns: 82px 1fr auto;
+    align-items: center;
+    gap: 22px;
+    margin-bottom: 28px;
+    padding: 24px;
+    border: 1px solid #f1d6d8;
+    border-radius: 22px;
+    background: linear-gradient(135deg, #17191e, #421116);
+    color: #fff;
+    box-shadow: 0 24px 60px rgba(22, 24, 30, .14);
+}
+
+.staff-month-card p {
+    max-width: 720px;
+    color: #d6d8df;
+    line-height: 1.7;
+}
+
+.staff-month-card .staff-public-avatar {
+    width: 82px;
+    height: 82px;
+    border-radius: 24px;
 }
 
 .staff-public-head {
@@ -257,6 +307,106 @@
     font-size: 12px;
 }
 
+.staff-public-card summary {
+    display: block;
+    list-style: none;
+}
+
+.staff-public-card summary::-webkit-details-marker {
+    display: none;
+}
+
+.staff-role-badge {
+    display: inline-flex;
+    align-items: center;
+    width: max-content;
+    margin: 0 0 14px;
+    padding: 7px 10px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: .3px;
+}
+
+.staff-role-badge.compact {
+    margin-top: 8px;
+    padding: 5px 8px;
+    font-size: 8px;
+}
+
+.role-owner,
+.role-eigenaar {
+    background: linear-gradient(135deg, #17191e, #df1822);
+    color: #fff;
+}
+
+.role-management,
+.role-admin {
+    background: #fff7df;
+    color: #9a6500;
+}
+
+.role-moderator {
+    background: #eaf2ff;
+    color: #1d5aaa;
+}
+
+.role-helper {
+    background: #eaf8ef;
+    color: #237a4d;
+}
+
+.role-jury,
+.role-partner_manager {
+    background: #f1edff;
+    color: #5b3bc4;
+}
+
+.staff-specialties {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 18px 0;
+}
+
+.staff-specialties span {
+    padding: 7px 9px;
+    border-radius: 999px;
+    background: #f2f3f5;
+    color: #6d727b;
+    font-size: 10px;
+    font-weight: 800;
+}
+
+.staff-mini-profile {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 18px;
+    padding-top: 18px;
+    border-top: 1px solid #eee;
+}
+
+.staff-mini-profile strong,
+.staff-mini-profile span,
+.staff-mini-profile a {
+    display: block;
+}
+
+.staff-mini-profile strong {
+    color: #9aa0aa;
+    font-size: 9px;
+    letter-spacing: 1.4px;
+    text-transform: uppercase;
+}
+
+.staff-mini-profile span,
+.staff-mini-profile a {
+    margin-top: 5px;
+    font-size: 12px;
+    font-weight: 800;
+}
+
 .availability {
     display: inline-flex;
     align-items: center;
@@ -284,6 +434,26 @@
 }
 
 .availability.unavailable:before {
+    background: #df1822;
+}
+
+.staff-status.status-busy {
+    background: #fff7df;
+    color: #9a6500;
+}
+
+.staff-status.status-vacation,
+.staff-status.status-away {
+    background: #fff0f1;
+    color: #bd171e;
+}
+
+.staff-status.status-busy:before {
+    background: #e7a51f;
+}
+
+.staff-status.status-vacation:before,
+.staff-status.status-away:before {
     background: #df1822;
 }
 

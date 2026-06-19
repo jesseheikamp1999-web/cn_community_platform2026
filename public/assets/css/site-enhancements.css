@@ -266,19 +266,42 @@
 
 .portrait {
     overflow: hidden;
+    position: relative;
+    height: 270px;
+    display: block;
 }
 
-.portrait img {
+.portrait img,
+.portrait .user-avatar-image,
+.portrait .user-avatar-fallback {
     width: 100%;
     height: 100%;
     object-fit: cover;
 }
 
 .portrait .user-avatar-wrap {
+    display: block;
     width: 100%;
     height: 100%;
     border-radius: inherit;
+    overflow: hidden;
     font-size: 80px;
+}
+
+.people-grid article {
+    min-height: 342px;
+    padding-bottom: 28px;
+}
+
+.people-grid h3,
+.people-grid p {
+    position: relative;
+    z-index: 2;
+}
+
+.people-grid article > span {
+    bottom: 7px;
+    line-height: 1;
 }
 
 .people-grid article > span.unavailable {

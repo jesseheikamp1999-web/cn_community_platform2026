@@ -5,6 +5,8 @@ namespace App\Services;
 use App\Models\AutomationLog;
 use App\Models\AwardEdition;
 use App\Models\AwardRound;
+use App\Models\DiscordChannel;
+use App\Models\DiscordDelivery;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -115,7 +117,7 @@ class CommunityAutomationService
             }
 
             if ($birthdayUser->birthday_visibility === 'community') {
-                $this->sendDiscord([
+                $this->sendDiscord('verjaardagen', [
                     'content' => $birthdayUser->discord_id
                         ? 'Gefeliciteerd <@'.$birthdayUser->discord_id.'>!'
                         : 'Gefeliciteerd '.$birthdayUser->name.'!',
@@ -142,7 +144,9 @@ class CommunityAutomationService
         $action = $round->type === 'nomination' ? 'Nominaties zijn geopend' : 'De stemronde is geopend';
         $url = $isMini ? route('mini.awards') : route('awards');
 
-        $this->sendDiscord([
+        $purpose = $round->type === 'public_vote' ? 'stem-nu' : 'awards-info';
+
+        $this->sendDiscord($purpose, [
             'embeds' => [[
                 'title' => $action.' voor '.$round->edition->name,
                 'description' => $round->type === 'nomination'
@@ -175,14 +179,44 @@ class CommunityAutomationService
         ]) === 1;
     }
 
-    private function sendDiscord(array $payload): void
+    private function sendDiscord(string $purpose, array $payload): void
     {
+        $channel = $this->discordChannel($purpose);
+        $delivery = null;
+
+        if ($channel && Schema::hasTable('discord_deliveries')) {
+            $delivery = DiscordDelivery::create([
+                'discord_channel_id' => $channel->id,
+                'event' => $purpose,
+                'payload' => $payload,
+                'status' => 'pending',
+            ]);
+        }
+
         try {
-            $this->discord->sendWebhook($payload);
+            $this->discord->sendWebhook($payload, $channel?->webhook_url);
+            $delivery?->update(['status' => 'sent', 'sent_at' => now()]);
         } catch (Throwable $exception) {
+            $delivery?->update([
+                'status' => 'failed',
+                'response' => Str::limit($exception->getMessage(), 1000),
+            ]);
             Log::warning('Community automation Discord notification failed.', [
+                'purpose' => $purpose,
                 'message' => $exception->getMessage(),
             ]);
         }
+    }
+
+    private function discordChannel(string $purpose): ?DiscordChannel
+    {
+        if (!Schema::hasTable('discord_channels')) {
+            return null;
+        }
+
+        return DiscordChannel::where('purpose', $purpose)
+            ->where('is_active', true)
+            ->whereNotNull('webhook_url')
+            ->first();
     }
 }

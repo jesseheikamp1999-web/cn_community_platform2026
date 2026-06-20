@@ -976,11 +976,55 @@ class PlatformTest extends TestCase
     {
         $user = User::factory()->create();
 
-        foreach (['profile', 'notifications', 'inbox', 'community', 'birthdays', 'nominations', 'votes', 'results', 'lessons', 'exams', 'certificates', 'badges', 'tasks', 'nomi', 'settings'] as $module) {
+        foreach (['profile', 'notifications', 'inbox', 'community', 'pulse', 'birthdays', 'nominations', 'votes', 'results', 'lessons', 'exams', 'certificates', 'badges', 'tasks', 'nomi', 'settings'] as $module) {
             $this->actingAs($user)
                 ->get(route('mijncn.module', $module))
                 ->assertOk();
         }
+    }
+
+    public function test_owner_can_prepare_and_manage_discord_pulse_channels(): void
+    {
+        $owner = User::factory()->create(['role' => \App\Enums\UserRole::Owner]);
+
+        $this->actingAs($owner)
+            ->post(route('mijncn.discord.upgrade'))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertDatabaseHas('discord_channels', [
+            'purpose' => 'nieuws',
+            'name' => '📰┃nieuws',
+        ]);
+
+        $this->actingAs($owner)
+            ->get(route('mijncn.module', 'discord'))
+            ->assertOk()
+            ->assertSee('Bot &amp; Discord', false)
+            ->assertSee('📡┃cn-pulse')
+            ->assertSee('📰┃nieuws');
+    }
+
+    public function test_discord_channel_test_sends_webhook_and_logs_delivery(): void
+    {
+        Http::fake(['discord.test/*' => Http::response(['ok' => true])]);
+        $owner = User::factory()->create(['role' => \App\Enums\UserRole::Owner]);
+
+        $this->actingAs($owner)->post(route('mijncn.discord.upgrade'));
+        $channel = \App\Models\DiscordChannel::where('purpose', 'verjaardagen')->firstOrFail();
+        $channel->update(['webhook_url' => 'https://discord.test/verjaardagen']);
+
+        $this->actingAs($owner)
+            ->post(route('mijncn.discord.channel.test', $channel))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        Http::assertSent(fn ($request) => $request->url() === 'https://discord.test/verjaardagen');
+        $this->assertDatabaseHas('discord_deliveries', [
+            'discord_channel_id' => $channel->id,
+            'event' => 'test',
+            'status' => 'sent',
+        ]);
     }
 
     public function test_community_directory_only_lists_discord_connected_mijncn_users(): void

@@ -4,12 +4,17 @@ namespace App\Http\Controllers;
 
 use App\Models\Badge;
 use App\Models\AbsenceRequest;
+use App\Models\DiscordChannel;
+use App\Models\DiscordDelivery;
 use App\Models\DiscordMember;
 use App\Models\LearningPath;
 use App\Models\Lesson;
 use App\Models\Partner;
 use App\Models\Task;
 use App\Models\User;
+use App\Services\CnPulseService;
+use App\Services\CommunityAutomationService;
+use App\Services\DiscordService;
 use App\Services\NomiAiService;
 use App\Services\TaskWorkflowService;
 use Carbon\Carbon;
@@ -183,6 +188,23 @@ class MijnCnController extends Controller
                 ->paginate(24)
                 ->withQueryString();
             $data['communitySearch'] = $search;
+        } elseif ($module === 'pulse') {
+            $pulse = app(CnPulseService::class);
+            $data['pulseItems'] = $pulse->feed();
+            $data['statusCards'] = $pulse->statusCards();
+        } elseif ($module === 'discord') {
+            abort_unless($this->canManageDiscord($user), 403);
+            $pulse = app(CnPulseService::class);
+            $data['discordReady'] = Schema::hasTable('discord_channels') && Schema::hasTable('discord_deliveries');
+            $data['discordChannels'] = $data['discordReady']
+                ? DiscordChannel::orderBy('purpose')->get()->keyBy('purpose')
+                : collect();
+            $data['discordDeliveries'] = $data['discordReady']
+                ? DiscordDelivery::with('channel')->latest()->limit(12)->get()
+                : collect();
+            $data['discordPurposes'] = $this->discordPurposes();
+            $data['pulseItems'] = $pulse->feed(8);
+            $data['statusCards'] = $pulse->statusCards();
         } elseif ($module === 'partners') {
             abort_unless($this->canManagePartners($user), 403);
             $partnerQuery = Partner::query();
@@ -479,15 +501,152 @@ class MijnCnController extends Controller
         return back()->with('success', 'Partner-ranglijst is bijgewerkt. Je kunt nu score, positie, categorie en homepage-weergave beheren.');
     }
 
+    public function upgradeDiscordIntegration(Request $request): RedirectResponse
+    {
+        abort_unless($this->canManageDiscord($request->user()), 403);
+
+        if (!Schema::hasTable('discord_channels')) {
+            Schema::create('discord_channels', function (Blueprint $table) {
+                $table->id();
+                $table->string('discord_channel_id')->unique();
+                $table->string('name');
+                $table->string('purpose');
+                $table->string('webhook_url')->nullable();
+                $table->boolean('is_active')->default(true);
+                $table->timestamps();
+            });
+        }
+
+        if (!Schema::hasTable('discord_deliveries')) {
+            Schema::create('discord_deliveries', function (Blueprint $table) {
+                $table->id();
+                $table->foreignId('discord_channel_id')->nullable()->constrained()->nullOnDelete();
+                $table->string('event');
+                $table->json('payload');
+                $table->enum('status', ['pending', 'sent', 'failed'])->default('pending');
+                $table->text('response')->nullable();
+                $table->timestamp('sent_at')->nullable();
+                $table->timestamps();
+            });
+        }
+
+        foreach ($this->discordPurposes() as $purpose => $config) {
+            DiscordChannel::firstOrCreate(
+                ['purpose' => $purpose],
+                [
+                    'discord_channel_id' => $purpose,
+                    'name' => $config['name'],
+                    'webhook_url' => null,
+                    'is_active' => true,
+                ]
+            );
+        }
+
+        return back()->with('success', 'CN Pulse & Discord-kanalen zijn klaargezet. Vul per kanaal de webhook in en stuur een testbericht.');
+    }
+
+    public function saveDiscordChannel(Request $request): RedirectResponse
+    {
+        abort_unless($this->canManageDiscord($request->user()), 403);
+        abort_unless(Schema::hasTable('discord_channels'), 404);
+
+        $data = $request->validate([
+            'purpose' => ['required', 'string', 'max:80'],
+            'name' => ['required', 'string', 'max:120'],
+            'discord_channel_id' => ['nullable', 'string', 'max:120'],
+            'webhook_url' => ['nullable', 'url', 'max:500'],
+            'is_active' => ['nullable', 'boolean'],
+        ]);
+
+        DiscordChannel::updateOrCreate(
+            ['purpose' => $data['purpose']],
+            [
+                'name' => $data['name'],
+                'discord_channel_id' => $data['discord_channel_id'] ?: $data['purpose'],
+                'webhook_url' => $data['webhook_url'] ?? null,
+                'is_active' => $request->boolean('is_active'),
+            ]
+        );
+
+        return back()->with('success', 'Discord-kanaal opgeslagen.');
+    }
+
+    public function testDiscordChannel(Request $request, DiscordChannel $channel, DiscordService $discord): RedirectResponse
+    {
+        abort_unless($this->canManageDiscord($request->user()), 403);
+
+        $payload = [
+            'content' => null,
+            'embeds' => [[
+                'title' => 'CN Pulse testbericht',
+                'description' => 'Dit kanaal is gekoppeld aan **'.$channel->name.'**. Bot-pushes voor `'.$channel->purpose.'` komen hier terecht.',
+                'color' => 14883619,
+                'fields' => [[
+                    'name' => 'MijnCN',
+                    'value' => route('mijncn.module', 'discord'),
+                    'inline' => false,
+                ]],
+            ]],
+        ];
+
+        $delivery = DiscordDelivery::create([
+            'discord_channel_id' => $channel->id,
+            'event' => 'test',
+            'payload' => $payload,
+            'status' => 'pending',
+        ]);
+
+        try {
+            $discord->sendWebhook($payload, $channel->webhook_url);
+            $delivery->update(['status' => 'sent', 'sent_at' => now()]);
+        } catch (\Throwable $exception) {
+            $delivery->update(['status' => 'failed', 'response' => Str::limit($exception->getMessage(), 1000)]);
+
+            return back()->withErrors(['discord' => 'Testbericht mislukt: '.$exception->getMessage()]);
+        }
+
+        return back()->with('success', 'Testbericht verstuurd naar '.$channel->name.'.');
+    }
+
+    public function runDiscordAutomation(Request $request, CommunityAutomationService $automation): RedirectResponse
+    {
+        abort_unless($this->canManageDiscord($request->user()), 403);
+
+        $result = $automation->run();
+
+        return back()->with('success', 'Automatisering uitgevoerd: awards '.$result['award_phases'].', verjaardagen '.$result['birthdays'].'.');
+    }
+
     private function modules(): array
     {
-        return ['profile', 'notifications', 'inbox', 'nominations', 'votes', 'results', 'lessons', 'exams', 'certificates', 'badges', 'tasks', 'nomi', 'settings', 'absences', 'birthdays', 'community', 'partners'];
+        return ['profile', 'notifications', 'inbox', 'nominations', 'votes', 'results', 'lessons', 'exams', 'certificates', 'badges', 'tasks', 'nomi', 'settings', 'absences', 'birthdays', 'community', 'pulse', 'discord', 'partners'];
     }
 
     private function canManagePartners(User $user): bool
     {
         return in_array($user->role->value, ['owner', 'management', 'partner_manager'], true)
             || $user->hasPermission('partners.manage');
+    }
+
+    private function canManageDiscord(User $user): bool
+    {
+        return in_array($user->role->value, ['owner', 'management', 'admin'], true)
+            || $user->hasPermission('content.manage');
+    }
+
+    private function discordPurposes(): array
+    {
+        return [
+            'cn-pulse' => ['name' => '📡┃cn-pulse', 'description' => 'Algemene live feed uit MijnCN met nominaties, partners, Academy en community-updates.'],
+            'nieuws' => ['name' => '📰┃nieuws', 'description' => 'CN nieuws, NU.nl/NOS feed en handmatige nieuwsberichten.'],
+            'verjaardagen' => ['name' => '🎂┃verjaardagen', 'description' => 'Automatische verjaardagsmeldingen.'],
+            'staff-status' => ['name' => '👥┃staff-status', 'description' => 'Afwezigheid, beschikbaarheid en teamrooster-updates.'],
+            'dagelijkse-statistieken' => ['name' => '📊┃dagelijkse-statistieken', 'description' => 'Dagelijkse of wekelijkse statistieken over leden, stemmen en activiteit.'],
+            'awards-info' => ['name' => '🏆┃awards-info', 'description' => 'Awards-uitleg, fases en nominatie-aankondigingen.'],
+            'stem-nu' => ['name' => '🗳️┃stem-nu', 'description' => 'Actieve stemrondes met directe link naar stemmen.'],
+            'trending' => ['name' => '🔥┃trending', 'description' => 'Trending nominaties, categorieën en populaire finalistprofielen.'],
+            'award-logs' => ['name' => '📥┃award-logs', 'description' => 'Interne awardlogs: goedgekeurd, afgewezen, samengevoegd en juryupdates.'],
+        ];
     }
 
     private function validatePartner(Request $request, ?Partner $partner = null): array

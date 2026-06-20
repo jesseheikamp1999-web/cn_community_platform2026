@@ -90,10 +90,14 @@ Route::middleware('auth')->group(function () {
     Route::post('/mijn-cn/partners/database-bijwerken', [MijnCnController::class, 'upgradePartnerRankings'])->name('mijncn.partners.upgrade');
     Route::put('/mijn-cn/partners/{partner}', [MijnCnController::class, 'updatePartner'])->name('mijncn.partners.update');
     Route::delete('/mijn-cn/partners/{partner}', [MijnCnController::class, 'destroyPartner'])->name('mijncn.partners.destroy');
+    Route::post('/mijn-cn/discord/database-bijwerken', [MijnCnController::class, 'upgradeDiscordIntegration'])->name('mijncn.discord.upgrade');
+    Route::post('/mijn-cn/discord/kanaal', [MijnCnController::class, 'saveDiscordChannel'])->name('mijncn.discord.channel.save');
+    Route::post('/mijn-cn/discord/kanaal/{channel}/testen', [MijnCnController::class, 'testDiscordChannel'])->name('mijncn.discord.channel.test');
+    Route::post('/mijn-cn/discord/automatisering', [MijnCnController::class, 'runDiscordAutomation'])->name('mijncn.discord.automation');
     Route::post('/mijn-cn/afwezigheid', [MijnCnController::class, 'reportAbsence'])->name('mijncn.absences.store');
     Route::delete('/mijn-cn/afwezigheid/{absence}', [MijnCnController::class, 'cancelAbsence'])->name('mijncn.absences.cancel');
     Route::get('/mijn-cn/{module}', [MijnCnController::class, 'show'])
-        ->whereIn('module', ['profile', 'notifications', 'inbox', 'nominations', 'votes', 'results', 'lessons', 'exams', 'certificates', 'badges', 'tasks', 'nomi', 'settings', 'absences', 'birthdays', 'community', 'partners'])
+        ->whereIn('module', ['profile', 'notifications', 'inbox', 'nominations', 'votes', 'results', 'lessons', 'exams', 'certificates', 'badges', 'tasks', 'nomi', 'settings', 'absences', 'birthdays', 'community', 'pulse', 'discord', 'partners'])
         ->name('mijncn.module');
     Route::post('/awards/categorie/{category}/nomineren', [AwardActionController::class, 'nominate'])->name('awards.nominate');
     Route::post('/awards/nominatie/{nomination}/stem', [AwardActionController::class, 'vote'])->name('awards.vote');

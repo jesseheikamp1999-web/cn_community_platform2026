@@ -18,6 +18,8 @@
         'absences' => ['Afwezigheid', 'Geef aan wanneer je tijdelijk niet beschikbaar bent voor CN.'],
         'birthdays' => ['Verjaardagen', 'Bekijk aankomende verjaardagen volgens de privacyvoorkeuren van leden.'],
         'community' => ['Communityleden', 'De mensen die via Discord zijn ingelogd en onderdeel zijn van MijnCN.'],
+        'pulse' => ['CN Pulse', 'Live community-feed met nieuws, awards, verjaardagen, staffstatus en mijlpalen.'],
+        'discord' => ['Bot & Discord', 'Koppel CN Pulse-events aan Discord-kanalen en test bot-pushes.'],
         'partners' => ['Projecten & partners', 'Beheer de publieke server- en projectranglijst van CN.'],
     ];
     [$pageTitle, $pageDescription] = $titles[$module];
@@ -35,6 +37,8 @@
             <span class="discord-connected"><i></i> Discord gekoppeld</span>
         @elseif($module === 'community' && in_array($user->role->value, ['management', 'owner'], true))
             <form method="post" action="{{ route('staff.discord.members.sync') }}">@csrf<button class="button button-primary">Discord synchroniseren</button></form>
+        @elseif($module === 'discord')
+            <form method="post" action="{{ route('mijncn.discord.upgrade') }}">@csrf<button class="button button-primary">Database bijwerken</button></form>
         @endif
     </header>
 
@@ -429,6 +433,98 @@
                 </div>
                 {{ $members->links() }}
             </section>
+        </section>
+
+    @elseif($module === 'pulse')
+        <section class="pulse-hero">
+            @foreach($statusCards as $card)
+                <article><span>{{ $card['label'] }}</span><strong>{{ $card['value'] }}</strong><small>{{ $card['hint'] }}</small></article>
+            @endforeach
+        </section>
+        <section class="module-card">
+            <div class="module-card-heading"><div><span>LIVE FEED</span><h2>Wat speelt er nu?</h2></div></div>
+            <div class="pulse-feed">
+                @forelse($pulseItems as $item)
+                    <a href="{{ $item['url'] }}">
+                        <span>{{ $item['type'] }}</span>
+                        <strong>{{ $item['title'] }}</strong>
+                        <p>{{ $item['description'] }}</p>
+                        <time>{{ \Carbon\Carbon::parse($item['date'])->diffForHumans() }}</time>
+                    </a>
+                @empty
+                    <div class="module-empty"><h3>Nog geen Pulse-items</h3><p>Zodra er nieuws, nominaties of staffupdates zijn, verschijnen ze hier.</p></div>
+                @endforelse
+            </div>
+        </section>
+
+    @elseif($module === 'discord')
+        @unless($discordReady)
+            <div class="module-alert error">
+                Discord-kanalen zijn nog niet klaargezet. Klik op <strong>Database bijwerken</strong> om dit zonder artisan te installeren.
+            </div>
+        @endunless
+        <section class="pulse-hero">
+            @foreach($statusCards as $card)
+                <article><span>{{ $card['label'] }}</span><strong>{{ $card['value'] }}</strong><small>{{ $card['hint'] }}</small></article>
+            @endforeach
+        </section>
+        <section class="module-card discord-map-card">
+            <div class="module-card-heading">
+                <div><span>DISCORD CATEGORIEËN</span><h2>Nieuwe kanaalindeling</h2></div>
+                @if($discordReady)
+                    <form method="post" action="{{ route('mijncn.discord.automation') }}">@csrf<button class="text-action">Automatisering draaien</button></form>
+                @endif
+            </div>
+            <div class="discord-category-grid">
+                <article><span>📌 | INFORMATIE</span><p>#📢┃aankondigingen<br>#👋┃welkom<br>#ℹ️┃informatie<br>#📚┃regels<br>#🎫┃support<br>#🧾┃changelog</p></article>
+                <article><span>📡 | CN PULSE</span><p>#📡┃cn-pulse<br>#📰┃nieuws<br>#🎂┃verjaardagen<br>#📊┃dagelijkse-statistieken<br>#🎲┃events<br>#🎉┃giveaways</p></article>
+                <article><span>🏆 | AWARDS</span><p>#🏆┃awards-info<br>#🗳️┃stem-nu<br>#🔥┃trending<br>#📈┃leaderboard<br>#📥┃award-logs</p></article>
+            </div>
+        </section>
+        <section class="module-card">
+            <div class="module-card-heading"><div><span>BOT PUSHES</span><h2>Kanalen koppelen</h2></div></div>
+            <div class="discord-channel-list">
+                @foreach($discordPurposes as $purpose => $config)
+                    @php($channel = $discordChannels->get($purpose))
+                    <article>
+                        <div>
+                            <strong>{{ $config['name'] }}</strong>
+                            <p>{{ $config['description'] }}</p>
+                        </div>
+                        @if($discordReady)
+                            <form method="post" action="{{ route('mijncn.discord.channel.save') }}" class="discord-channel-form">
+                                @csrf
+                                <input type="hidden" name="purpose" value="{{ $purpose }}">
+                                <input name="name" value="{{ old('name', $channel?->name ?? $config['name']) }}" required>
+                                <input name="discord_channel_id" value="{{ old('discord_channel_id', $channel?->discord_channel_id ?? $purpose) }}" placeholder="Discord kanaal ID">
+                                <input name="webhook_url" value="{{ old('webhook_url', $channel?->webhook_url) }}" placeholder="Webhook URL">
+                                <label><input type="checkbox" name="is_active" value="1" @checked($channel?->is_active ?? true)> Actief</label>
+                                <button class="button button-secondary button-small">Opslaan</button>
+                            </form>
+                            @if($channel)
+                                <form method="post" action="{{ route('mijncn.discord.channel.test', $channel) }}">
+                                    @csrf
+                                    <button class="text-action">Testbericht sturen</button>
+                                </form>
+                            @endif
+                        @endif
+                    </article>
+                @endforeach
+            </div>
+        </section>
+        <section class="module-card">
+            <div class="module-card-heading"><div><span>DELIVERY LOG</span><h2>Laatste bot-pushes</h2></div></div>
+            <div class="module-list">
+                @forelse($discordDeliveries as $delivery)
+                    <article>
+                        <div class="list-icon">@include('components.icon', ['name' => 'mail'])</div>
+                        <div><strong>{{ $delivery->event }} → {{ $delivery->channel?->name ?: 'standaard webhook' }}</strong><p>{{ $delivery->response ?: 'Geen foutmelding.' }}</p></div>
+                        <span class="status status-{{ $delivery->status === 'sent' ? 'approved' : ($delivery->status === 'failed' ? 'rejected' : 'controle') }}">{{ $delivery->status }}</span>
+                    </article>
+                @empty
+                    <div class="module-empty"><h3>Nog geen bot-pushes</h3><p>Stuur een testbericht of laat een automation draaien.</p></div>
+                @endforelse
+            </div>
         </section>
 
     @elseif($module === 'partners')

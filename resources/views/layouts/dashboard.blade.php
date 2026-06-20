@@ -49,6 +49,7 @@
         <a class="{{ request()->is('mijn-cn/profile') ? 'active' : '' }}" href="{{ route('mijncn.module', 'profile') }}">@include('components.icon', ['name' => 'user']) <span>Profiel</span></a>
         <a class="{{ request()->is('mijn-cn/notifications') ? 'active' : '' }}" href="{{ route('mijncn.module', 'notifications') }}">@include('components.icon', ['name' => 'bell']) <span>Meldingen</span>@if($unreadNotifications)<b>{{ $unreadNotifications }}</b>@endif</a>
         <a class="{{ request()->is('mijn-cn/inbox') ? 'active' : '' }}" href="{{ route('mijncn.module', 'inbox') }}">@include('components.icon', ['name' => 'mail']) <span>Inbox</span>@if($unreadMessages)<b>{{ $unreadMessages }}</b>@endif</a>
+        <a class="{{ request()->is('mijn-cn/pulse') ? 'active' : '' }}" href="{{ route('mijncn.module', 'pulse') }}">@include('components.icon', ['name' => 'spark']) <span>CN Pulse</span><em>NIEUW</em></a>
         <a class="{{ request()->is('mijn-cn/community') ? 'active' : '' }}" href="{{ route('mijncn.module', 'community') }}">@include('components.icon', ['name' => 'community']) <span>Communityleden</span></a>
         <a class="{{ request()->is('mijn-cn/birthdays') ? 'active' : '' }}" href="{{ route('mijncn.module', 'birthdays') }}">@include('components.icon', ['name' => 'calendar']) <span>Verjaardagen</span></a>
         @if($currentUser->role->value !== 'member')
@@ -82,6 +83,9 @@
             @endif
             @if($currentUser->hasPermission('content.manage'))
                 <a class="{{ request()->routeIs('staff.news.*') ? 'active' : '' }}" href="{{ route('staff.news.index') }}">@include('components.icon', ['name' => 'book']) <span>Nieuwsbeheer</span></a>
+            @endif
+            @if(in_array($currentUser->role->value, ['owner', 'management', 'admin'], true) || $currentUser->hasPermission('content.manage'))
+                <a class="{{ request()->is('mijn-cn/discord') ? 'active' : '' }}" href="{{ route('mijncn.module', 'discord') }}">@include('components.icon', ['name' => 'settings']) <span>Bot & Discord</span></a>
             @endif
             @if($currentUser->role->value === 'owner')
                 <a class="{{ request()->routeIs('staff.access*') ? 'active' : '' }}" href="{{ route('staff.access') }}">@include('components.icon', ['name' => 'settings']) <span>Rollen & permissies</span></a>

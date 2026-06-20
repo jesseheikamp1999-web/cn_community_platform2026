@@ -506,6 +506,15 @@
                                     @csrf
                                     <button class="text-action">Testbericht sturen</button>
                                 </form>
+                                @if(in_array($purpose, ['cn-pulse', 'staff-status', 'awards-info', 'stem-nu', 'trending', 'leaderboard', 'award-logs'], true))
+                                    <form method="post" action="{{ route('mijncn.discord.channel.panel', $channel) }}">
+                                        @csrf
+                                        <button class="text-action">{{ $channel->static_message_id ? 'Vast bericht updaten' : 'Vast bericht plaatsen' }}</button>
+                                        @if($channel->static_message_updated_at)
+                                            <small>Laatst: {{ $channel->static_message_updated_at->diffForHumans() }}</small>
+                                        @endif
+                                    </form>
+                                @endif
                             @endif
                         @endif
                     </article>

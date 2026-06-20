@@ -158,6 +158,8 @@ return new class extends Migration
             $table->string('name');
             $table->string('purpose');
             $table->string('webhook_url')->nullable();
+            $table->string('static_message_id')->nullable();
+            $table->timestamp('static_message_updated_at')->nullable();
             $table->boolean('is_active')->default(true);
             $table->timestamps();
         });

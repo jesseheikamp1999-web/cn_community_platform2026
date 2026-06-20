@@ -1029,6 +1029,43 @@ class PlatformTest extends TestCase
         ]);
     }
 
+    public function test_owner_can_place_and_update_static_discord_panel_message(): void
+    {
+        Http::fake([
+            'discord.com/api/v10/channels/*/messages/987654321098765432' => Http::response(['id' => '987654321098765432']),
+            'discord.com/api/v10/channels/*/messages' => Http::response(['id' => '987654321098765432']),
+        ]);
+        config(['services.discord.bot_token' => 'bot-token']);
+        $owner = User::factory()->create(['role' => \App\Enums\UserRole::Owner]);
+
+        $this->actingAs($owner)->post(route('mijncn.discord.upgrade'));
+        $channel = \App\Models\DiscordChannel::where('purpose', 'awards-info')->firstOrFail();
+        $channel->update(['discord_channel_id' => '123456789012345678']);
+
+        $this->actingAs($owner)
+            ->post(route('mijncn.discord.channel.panel', $channel))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertDatabaseHas('discord_channels', [
+            'id' => $channel->id,
+            'static_message_id' => '987654321098765432',
+        ]);
+
+        $this->actingAs($owner)
+            ->post(route('mijncn.discord.channel.panel', $channel->fresh()))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        Http::assertSent(fn ($request) => $request->method() === 'PATCH'
+            && str_contains($request->url(), '/messages/987654321098765432'));
+        $this->assertDatabaseHas('discord_deliveries', [
+            'discord_channel_id' => $channel->id,
+            'event' => 'static_panel:awards-info',
+            'status' => 'sent',
+        ]);
+    }
+
     public function test_community_directory_only_lists_discord_connected_mijncn_users(): void
     {
         $viewer = User::factory()->create(['discord_id' => 'viewer-discord']);

@@ -4,11 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Models\Badge;
 use App\Models\AbsenceRequest;
+use App\Models\AwardEdition;
 use App\Models\DiscordChannel;
 use App\Models\DiscordDelivery;
 use App\Models\DiscordMember;
 use App\Models\LearningPath;
 use App\Models\Lesson;
+use App\Models\Nomination;
 use App\Models\Partner;
 use App\Models\Task;
 use App\Models\User;
@@ -202,7 +204,9 @@ class MijnCnController extends Controller
             $data['discordDeliveries'] = $data['discordReady']
                 ? DiscordDelivery::with('channel')->latest()->limit(12)->get()
                 : collect();
-            $data['discordPurposes'] = $this->discordPurposes();
+            $data['discordPurposes'] = $this->discordPurposes() + [
+                'leaderboard' => ['name' => 'leaderboard', 'description' => 'Actuele ranglijst met topnominaties en community-activiteit.'],
+            ];
             $data['pulseItems'] = $pulse->feed(8);
             $data['statusCards'] = $pulse->statusCards();
         } elseif ($module === 'partners') {
@@ -512,8 +516,24 @@ class MijnCnController extends Controller
                 $table->string('name');
                 $table->string('purpose');
                 $table->string('webhook_url')->nullable();
+                $table->string('static_message_id')->nullable();
+                $table->timestamp('static_message_updated_at')->nullable();
                 $table->boolean('is_active')->default(true);
                 $table->timestamps();
+            });
+        }
+
+        $missingChannelColumns = collect(['static_message_id', 'static_message_updated_at'])
+            ->reject(fn (string $column) => Schema::hasColumn('discord_channels', $column));
+
+        if ($missingChannelColumns->isNotEmpty()) {
+            Schema::table('discord_channels', function (Blueprint $table) use ($missingChannelColumns) {
+                if ($missingChannelColumns->contains('static_message_id')) {
+                    $table->string('static_message_id')->nullable();
+                }
+                if ($missingChannelColumns->contains('static_message_updated_at')) {
+                    $table->timestamp('static_message_updated_at')->nullable();
+                }
             });
         }
 
@@ -541,6 +561,15 @@ class MijnCnController extends Controller
                 ]
             );
         }
+        DiscordChannel::firstOrCreate(
+            ['purpose' => 'leaderboard'],
+            [
+                'discord_channel_id' => 'leaderboard',
+                'name' => 'leaderboard',
+                'webhook_url' => null,
+                'is_active' => true,
+            ]
+        );
 
         return back()->with('success', 'CN Pulse & Discord-kanalen zijn klaargezet. Vul per kanaal het Discord kanaal-ID in en stuur een testbericht via de bot.');
     }
@@ -608,6 +637,38 @@ class MijnCnController extends Controller
         return back()->with('success', 'Testbericht verstuurd naar '.$channel->name.'.');
     }
 
+    public function publishDiscordPanel(Request $request, DiscordChannel $channel, DiscordService $discord, CnPulseService $pulse): RedirectResponse
+    {
+        abort_unless($this->canManageDiscord($request->user()), 403);
+        abort_unless($this->isStaticDiscordPurpose($channel->purpose), 422);
+
+        $payload = $this->discordStaticPanelPayload($channel->purpose, $pulse);
+        $delivery = DiscordDelivery::create([
+            'discord_channel_id' => $channel->id,
+            'event' => 'static_panel:'.$channel->purpose,
+            'payload' => $payload,
+            'status' => 'pending',
+        ]);
+
+        try {
+            $response = $channel->static_message_id
+                ? $discord->editChannelMessage($channel->discord_channel_id, $channel->static_message_id, $payload)
+                : $discord->sendChannelMessage($channel->discord_channel_id, $payload);
+
+            $channel->update([
+                'static_message_id' => (string) ($response['id'] ?? $channel->static_message_id),
+                'static_message_updated_at' => now(),
+            ]);
+            $delivery->update(['status' => 'sent', 'sent_at' => now()]);
+        } catch (\Throwable $exception) {
+            $delivery->update(['status' => 'failed', 'response' => Str::limit($exception->getMessage(), 1000)]);
+
+            return back()->withErrors(['discord' => 'Vast bericht bijwerken mislukt: '.$exception->getMessage()]);
+        }
+
+        return back()->with('success', 'Vast kanaalbericht bijgewerkt voor '.$channel->name.'.');
+    }
+
     public function runDiscordAutomation(Request $request, CommunityAutomationService $automation): RedirectResponse
     {
         abort_unless($this->canManageDiscord($request->user()), 403);
@@ -647,6 +708,149 @@ class MijnCnController extends Controller
             'trending' => ['name' => '🔥┃trending', 'description' => 'Trending nominaties, categorieën en populaire finalistprofielen.'],
             'award-logs' => ['name' => '📥┃award-logs', 'description' => 'Interne awardlogs: goedgekeurd, afgewezen, samengevoegd en juryupdates.'],
         ];
+    }
+
+    private function isStaticDiscordPurpose(string $purpose): bool
+    {
+        return in_array($purpose, ['cn-pulse', 'staff-status', 'awards-info', 'stem-nu', 'trending', 'leaderboard', 'award-logs'], true);
+    }
+
+    private function discordStaticPanelPayload(string $purpose, CnPulseService $pulse): array
+    {
+        return match ($purpose) {
+            'cn-pulse' => $this->discordPanelPayload(
+                'CN Pulse',
+                'Live overzicht van wat er speelt binnen CN Community.',
+                collect($pulse->statusCards())->map(fn ($card) => [
+                    'name' => $card['label'],
+                    'value' => $card['value'].' - '.$card['hint'],
+                    'inline' => true,
+                ])->all(),
+                route('mijncn.module', 'pulse')
+            ),
+            'staff-status' => $this->discordPanelPayload(
+                'Staff status',
+                'Bekijk wie beschikbaar, druk of afwezig is.',
+                [[
+                    'name' => 'Rooster',
+                    'value' => 'Staff kan afwezigheid beheren via MijnCN. Dit paneel wordt bijgewerkt vanuit de website.',
+                    'inline' => false,
+                ]],
+                route('mijncn.module', 'absences')
+            ),
+            'awards-info' => $this->discordPanelPayload(
+                'CN Awards 2026',
+                'Nomineren, stemmen, jury en finale draaien via het CN Community Platform.',
+                $this->awardPanelFields(),
+                route('awards')
+            ),
+            'stem-nu' => $this->discordPanelPayload(
+                'Stemronde',
+                'Wanneer stemmen open is, gebruik je deze knop om direct te stemmen.',
+                $this->awardPanelFields('public_vote'),
+                route('awards')
+            ),
+            'trending', 'leaderboard' => $this->discordPanelPayload(
+                $purpose === 'trending' ? 'Trending nominaties' : 'Awards leaderboard',
+                'Actuele top op basis van stemmen en nominatie-activiteit.',
+                $this->topNominationFields(),
+                route('awards')
+            ),
+            'award-logs' => $this->discordPanelPayload(
+                'Award logboek',
+                'Interne awardstatus: reviews, merges, jury en publicaties.',
+                [[
+                    'name' => 'Status',
+                    'value' => 'Logs worden los gepusht. Dit vaste paneel markeert het kanaal als actief.',
+                    'inline' => false,
+                ]],
+                route('staff.awards')
+            ),
+        };
+    }
+
+    private function discordPanelPayload(string $title, string $description, array $fields, string $url): array
+    {
+        return [
+            'content' => null,
+            'embeds' => [[
+                'title' => $title,
+                'description' => $description,
+                'url' => $url,
+                'color' => 14883619,
+                'fields' => $fields,
+                'footer' => ['text' => 'CN Community Platform 2026 - automatisch bijgewerkt'],
+                'timestamp' => now()->toIso8601String(),
+            ]],
+            'components' => [[
+                'type' => 1,
+                'components' => [[
+                    'type' => 2,
+                    'style' => 5,
+                    'label' => 'Open MijnCN',
+                    'url' => route('dashboard'),
+                ], [
+                    'type' => 2,
+                    'style' => 5,
+                    'label' => 'Bekijk pagina',
+                    'url' => $url,
+                ]],
+            ]],
+        ];
+    }
+
+    private function awardPanelFields(?string $roundType = null): array
+    {
+        $edition = AwardEdition::with('rounds')
+            ->where('type', 'cn_awards')
+            ->latest('year')
+            ->first();
+
+        if (!$edition) {
+            return [['name' => 'Status', 'value' => 'Er is nog geen actieve Awards-editie.', 'inline' => false]];
+        }
+
+        $round = $roundType
+            ? $edition->rounds->firstWhere('type', $roundType)
+            : $edition->rounds->sortBy('starts_at')->first();
+
+        return [[
+            'name' => 'Editie',
+            'value' => $edition->name.' - '.$edition->status,
+            'inline' => true,
+        ], [
+            'name' => 'Nominaties',
+            'value' => (string) Nomination::whereHas('category', fn ($query) => $query->where('award_edition_id', $edition->id))->count(),
+            'inline' => true,
+        ], [
+            'name' => 'Planning',
+            'value' => $round ? $round->starts_at->format('d-m H:i').' tot '.$round->ends_at->format('d-m H:i') : 'Nog niet ingesteld',
+            'inline' => false,
+        ]];
+    }
+
+    private function topNominationFields(): array
+    {
+        if (!Schema::hasTable('nominations')) {
+            return [['name' => 'Leaderboard', 'value' => 'Nog geen nominaties beschikbaar.', 'inline' => false]];
+        }
+
+        $items = Nomination::withCount('votes')
+            ->whereIn('status', ['approved', 'finalist', 'winner'])
+            ->orderByDesc('votes_count')
+            ->orderByDesc('reputation_score')
+            ->limit(5)
+            ->get();
+
+        if ($items->isEmpty()) {
+            return [['name' => 'Leaderboard', 'value' => 'Nog geen goedgekeurde nominaties.', 'inline' => false]];
+        }
+
+        return $items->values()->map(fn (Nomination $nomination, int $index) => [
+            'name' => '#'.($index + 1).' '.$nomination->nominee_name,
+            'value' => $nomination->votes_count.' stemmen - reputatie '.number_format((float) $nomination->reputation_score, 1, ',', '.'),
+            'inline' => false,
+        ])->all();
     }
 
     private function validatePartner(Request $request, ?Partner $partner = null): array

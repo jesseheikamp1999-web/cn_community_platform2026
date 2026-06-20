@@ -12,12 +12,15 @@ class DiscordChannel extends Model
         'name',
         'purpose',
         'webhook_url',
+        'static_message_id',
+        'static_message_updated_at',
         'is_active',
     ];
 
     protected function casts(): array
     {
         return [
+            'static_message_updated_at' => 'datetime',
             'is_active' => 'boolean',
         ];
     }

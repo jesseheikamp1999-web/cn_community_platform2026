@@ -85,19 +85,44 @@ class DiscordService
         Http::post($webhook, $payload)->throw();
     }
 
-    public function sendChannelMessage(string $channelId, array $payload): void
+    public function sendChannelMessage(string $channelId, array $payload): array
+    {
+        return $this->botRequest('post', "https://discord.com/api/v10/channels/{$this->validateChannelId($channelId)}/messages", $payload);
+    }
+
+    public function editChannelMessage(string $channelId, string $messageId, array $payload): array
+    {
+        if ($messageId === '' || !ctype_digit($messageId)) {
+            throw new RuntimeException('Geen geldig Discord bericht-ID ingesteld.');
+        }
+
+        return $this->botRequest('patch', "https://discord.com/api/v10/channels/{$this->validateChannelId($channelId)}/messages/{$messageId}", $payload);
+    }
+
+    private function validateChannelId(string $channelId): string
+    {
+        if ($channelId === '' || !ctype_digit($channelId)) {
+            throw new RuntimeException('Geen geldig Discord kanaal-ID ingesteld.');
+        }
+
+        return $channelId;
+    }
+
+    private function botRequest(string $method, string $url, array $payload): array
     {
         $token = config('services.discord.bot_token');
         if (!$token) {
             throw new RuntimeException('Geen Discord bot token geconfigureerd.');
         }
 
-        if ($channelId === '' || !ctype_digit($channelId)) {
-            throw new RuntimeException('Geen geldig Discord kanaal-ID ingesteld.');
-        }
+        return Http::withHeaders(['Authorization' => 'Bot '.$token])
+            ->{$method}($url, $payload)
+            ->throw()
+            ->json();
+    }
 
-        Http::withHeaders(['Authorization' => 'Bot '.$token])
-            ->post("https://discord.com/api/v10/channels/{$channelId}/messages", $payload)
-            ->throw();
+    public function sendChannelMessageLegacy(string $channelId, array $payload): void
+    {
+        $this->sendChannelMessage($channelId, $payload);
     }
 }

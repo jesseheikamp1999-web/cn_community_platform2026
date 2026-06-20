@@ -93,6 +93,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/mijn-cn/discord/database-bijwerken', [MijnCnController::class, 'upgradeDiscordIntegration'])->name('mijncn.discord.upgrade');
     Route::post('/mijn-cn/discord/kanaal', [MijnCnController::class, 'saveDiscordChannel'])->name('mijncn.discord.channel.save');
     Route::post('/mijn-cn/discord/kanaal/{channel}/testen', [MijnCnController::class, 'testDiscordChannel'])->name('mijncn.discord.channel.test');
+    Route::post('/mijn-cn/discord/kanaal/{channel}/paneel', [MijnCnController::class, 'publishDiscordPanel'])->name('mijncn.discord.channel.panel');
     Route::post('/mijn-cn/discord/automatisering', [MijnCnController::class, 'runDiscordAutomation'])->name('mijncn.discord.automation');
     Route::post('/mijn-cn/afwezigheid', [MijnCnController::class, 'reportAbsence'])->name('mijncn.absences.store');
     Route::delete('/mijn-cn/afwezigheid/{absence}', [MijnCnController::class, 'cancelAbsence'])->name('mijncn.absences.cancel');

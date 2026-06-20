@@ -26,6 +26,18 @@ return new class extends Migration
             if (!Schema::hasColumn('partners', 'is_featured')) {
                 $table->boolean('is_featured')->default(true)->after('position');
             }
+            if (!Schema::hasColumn('partners', 'discord_invite')) {
+                $table->string('discord_invite')->nullable()->after('discord_id');
+            }
+            if (!Schema::hasColumn('partners', 'banner_url')) {
+                $table->string('banner_url')->nullable()->after('logo');
+            }
+            if (!Schema::hasColumn('partners', 'member_count')) {
+                $table->unsignedInteger('member_count')->nullable()->after('banner_url');
+            }
+            if (!Schema::hasColumn('partners', 'online_count')) {
+                $table->unsignedInteger('online_count')->nullable()->after('member_count');
+            }
         });
 
         $projects = [
@@ -64,7 +76,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('partners', function (Blueprint $table) {
-            foreach (['description', 'category', 'score', 'position', 'is_featured'] as $column) {
+            foreach (['description', 'category', 'score', 'position', 'is_featured', 'discord_invite', 'banner_url', 'member_count', 'online_count'] as $column) {
                 if (Schema::hasColumn('partners', $column)) {
                     $table->dropColumn($column);
                 }

@@ -16,6 +16,7 @@ use App\Models\Task;
 use App\Models\User;
 use App\Services\CnPulseService;
 use App\Services\CommunityAutomationService;
+use App\Services\DiscordInviteMetadataService;
 use App\Services\DiscordService;
 use App\Services\NomiAiService;
 use App\Services\TaskWorkflowService;
@@ -204,9 +205,7 @@ class MijnCnController extends Controller
             $data['discordDeliveries'] = $data['discordReady']
                 ? DiscordDelivery::with('channel')->latest()->limit(12)->get()
                 : collect();
-            $data['discordPurposes'] = $this->discordPurposes() + [
-                'leaderboard' => ['name' => 'leaderboard', 'description' => 'Actuele ranglijst met topnominaties en community-activiteit.'],
-            ];
+            $data['discordPurposes'] = $this->discordPurposeDefinitions();
             $data['pulseItems'] = $pulse->feed(8);
             $data['statusCards'] = $pulse->statusCards();
         } elseif ($module === 'partners') {
@@ -219,7 +218,7 @@ class MijnCnController extends Controller
                 $partnerQuery->orderByDesc('score');
             }
             $data['partners'] = $partnerQuery->orderBy('name')->get();
-            $data['partnerRankingsReady'] = Schema::hasColumns('partners', ['description', 'category', 'score', 'position', 'is_featured']);
+            $data['partnerRankingsReady'] = Schema::hasColumns('partners', ['description', 'category', 'score', 'position', 'is_featured', 'discord_invite', 'banner_url', 'member_count', 'online_count']);
         }
 
         return view('dashboard.module', $data);
@@ -317,7 +316,7 @@ class MijnCnController extends Controller
         return back()->with('success', 'De taak is voltooid.');
     }
 
-    public function reportAbsence(Request $request): RedirectResponse
+    public function reportAbsence(Request $request, CommunityAutomationService $automation): RedirectResponse
     {
         abort_unless($request->user()->role->value !== 'member', 403);
         $data = $request->validate([
@@ -361,7 +360,8 @@ class MijnCnController extends Controller
                 $absence['starts_at'] = $range['start'];
                 $absence['ends_at'] = $range['end'];
             }
-            $request->user()->absenceRequests()->create($absence);
+            $createdAbsence = $request->user()->absenceRequests()->create($absence);
+            $automation->announceAbsence($createdAbsence);
             $created++;
         }
 
@@ -402,6 +402,7 @@ class MijnCnController extends Controller
     {
         abort_unless($this->canManagePartners($request->user()), 403);
         $data = $this->validatePartner($request);
+        $data = $this->enrichPartnerFromDiscord($data, $request);
         $data['slug'] = Str::slug($data['name']);
         if (Schema::hasColumn('partners', 'is_featured')) {
             $data['is_featured'] = $request->boolean('is_featured');
@@ -419,6 +420,7 @@ class MijnCnController extends Controller
     {
         abort_unless($this->canManagePartners($request->user()), 403);
         $data = $this->validatePartner($request, $partner);
+        $data = $this->enrichPartnerFromDiscord($data, $request, $partner);
         $data['slug'] = Str::slug($data['name']);
         if (Schema::hasColumn('partners', 'is_featured')) {
             $data['is_featured'] = $request->boolean('is_featured');
@@ -449,7 +451,7 @@ class MijnCnController extends Controller
     {
         abort_unless($this->canManagePartners($request->user()), 403);
 
-        $missingColumns = collect(['description', 'category', 'score', 'position', 'is_featured'])
+        $missingColumns = collect(['description', 'category', 'score', 'position', 'is_featured', 'discord_invite', 'banner_url', 'member_count', 'online_count'])
             ->reject(fn (string $column) => Schema::hasColumn('partners', $column));
 
         if ($missingColumns->isNotEmpty()) {
@@ -468,6 +470,18 @@ class MijnCnController extends Controller
                 }
                 if ($missingColumns->contains('is_featured')) {
                     $table->boolean('is_featured')->default(true);
+                }
+                if ($missingColumns->contains('discord_invite')) {
+                    $table->string('discord_invite')->nullable();
+                }
+                if ($missingColumns->contains('banner_url')) {
+                    $table->string('banner_url')->nullable();
+                }
+                if ($missingColumns->contains('member_count')) {
+                    $table->unsignedInteger('member_count')->nullable();
+                }
+                if ($missingColumns->contains('online_count')) {
+                    $table->unsignedInteger('online_count')->nullable();
                 }
             });
         }
@@ -550,7 +564,7 @@ class MijnCnController extends Controller
             });
         }
 
-        foreach ($this->discordPurposes() as $purpose => $config) {
+        foreach ($this->discordPurposeDefinitions() as $purpose => $config) {
             DiscordChannel::firstOrCreate(
                 ['purpose' => $purpose],
                 [
@@ -561,16 +575,6 @@ class MijnCnController extends Controller
                 ]
             );
         }
-        DiscordChannel::firstOrCreate(
-            ['purpose' => 'leaderboard'],
-            [
-                'discord_channel_id' => 'leaderboard',
-                'name' => 'leaderboard',
-                'webhook_url' => null,
-                'is_active' => true,
-            ]
-        );
-
         return back()->with('success', 'CN Pulse & Discord-kanalen zijn klaargezet. Vul per kanaal het Discord kanaal-ID in en stuur een testbericht via de bot.');
     }
 
@@ -642,31 +646,35 @@ class MijnCnController extends Controller
         abort_unless($this->canManageDiscord($request->user()), 403);
         abort_unless($this->isStaticDiscordPurpose($channel->purpose), 422);
 
-        $payload = $this->discordStaticPanelPayload($channel->purpose, $pulse);
-        $delivery = DiscordDelivery::create([
-            'discord_channel_id' => $channel->id,
-            'event' => 'static_panel:'.$channel->purpose,
-            'payload' => $payload,
-            'status' => 'pending',
-        ]);
-
         try {
-            $response = $channel->static_message_id
-                ? $discord->editChannelMessage($channel->discord_channel_id, $channel->static_message_id, $payload)
-                : $discord->sendChannelMessage($channel->discord_channel_id, $payload);
-
-            $channel->update([
-                'static_message_id' => (string) ($response['id'] ?? $channel->static_message_id),
-                'static_message_updated_at' => now(),
-            ]);
-            $delivery->update(['status' => 'sent', 'sent_at' => now()]);
+            $this->publishStaticDiscordPanel($channel, $discord, $pulse);
         } catch (\Throwable $exception) {
-            $delivery->update(['status' => 'failed', 'response' => Str::limit($exception->getMessage(), 1000)]);
-
             return back()->withErrors(['discord' => 'Vast bericht bijwerken mislukt: '.$exception->getMessage()]);
         }
 
         return back()->with('success', 'Vast kanaalbericht bijgewerkt voor '.$channel->name.'.');
+    }
+
+    public function publishDiscordPanels(Request $request, DiscordService $discord, CnPulseService $pulse): RedirectResponse
+    {
+        abort_unless($this->canManageDiscord($request->user()), 403);
+        abort_unless(Schema::hasTable('discord_channels'), 404);
+
+        $updated = 0;
+        $failed = 0;
+        DiscordChannel::whereIn('purpose', ['cn-pulse', 'staff-status', 'awards-info', 'stem-nu', 'trending', 'leaderboard', 'award-logs'])
+            ->where('is_active', true)
+            ->get()
+            ->each(function (DiscordChannel $channel) use ($discord, $pulse, &$updated, &$failed): void {
+                try {
+                    $this->publishStaticDiscordPanel($channel, $discord, $pulse);
+                    $updated++;
+                } catch (\Throwable) {
+                    $failed++;
+                }
+            });
+
+        return back()->with('success', 'Vaste Discord-panelen bijgewerkt: '.$updated.' gelukt, '.$failed.' mislukt.');
     }
 
     public function runDiscordAutomation(Request $request, CommunityAutomationService $automation): RedirectResponse
@@ -675,7 +683,7 @@ class MijnCnController extends Controller
 
         $result = $automation->run();
 
-        return back()->with('success', 'Automatisering uitgevoerd: awards '.$result['award_phases'].', verjaardagen '.$result['birthdays'].'.');
+        return back()->with('success', 'Automatisering uitgevoerd: awards '.$result['award_phases'].', verjaardagen '.$result['birthdays'].', nieuws '.$result['news'].', staff-status '.$result['staff_status'].'.');
     }
 
     private function modules(): array
@@ -693,6 +701,22 @@ class MijnCnController extends Controller
     {
         return in_array($user->role->value, ['owner', 'management', 'admin'], true)
             || $user->hasPermission('content.manage');
+    }
+
+    private function discordPurposeDefinitions(): array
+    {
+        return [
+            'cn-pulse' => ['name' => '📡┃cn-pulse', 'description' => 'Live feed uit MijnCN met nominaties, partners, Academy en community-updates.'],
+            'nieuws' => ['name' => '📰┃nieuws', 'description' => 'CN nieuws, NU.nl/NOS feed en handmatige nieuwsberichten.'],
+            'verjaardagen' => ['name' => '🎂┃verjaardagen', 'description' => 'Automatische verjaardagsmeldingen.'],
+            'staff-status' => ['name' => '👥┃staff-status', 'description' => 'Afwezigheid, beschikbaarheid en teamrooster-updates.'],
+            'dagelijkse-statistieken' => ['name' => '📊┃dagelijkse-statistieken', 'description' => 'Dagelijkse of wekelijkse statistieken over leden, stemmen en activiteit.'],
+            'awards-info' => ['name' => '🏆┃awards-info', 'description' => 'Awards-uitleg, fases en nominatie-aankondigingen.'],
+            'stem-nu' => ['name' => '🗳️┃stem-nu', 'description' => 'Actieve stemrondes met directe link naar stemmen.'],
+            'trending' => ['name' => '🔥┃trending', 'description' => 'Trending nominaties, categorieen en populaire finalistprofielen.'],
+            'leaderboard' => ['name' => '📈┃leaderboard', 'description' => 'Actuele ranglijst met topnominaties en community-activiteit.'],
+            'award-logs' => ['name' => '📥┃award-logs', 'description' => 'Interne awardlogs: goedgekeurd, afgewezen, samengevoegd en juryupdates.'],
+        ];
     }
 
     private function discordPurposes(): array
@@ -715,12 +739,39 @@ class MijnCnController extends Controller
         return in_array($purpose, ['cn-pulse', 'staff-status', 'awards-info', 'stem-nu', 'trending', 'leaderboard', 'award-logs'], true);
     }
 
+    private function publishStaticDiscordPanel(DiscordChannel $channel, DiscordService $discord, CnPulseService $pulse): void
+    {
+        $payload = $this->discordStaticPanelPayload($channel->purpose, $pulse);
+        $delivery = DiscordDelivery::create([
+            'discord_channel_id' => $channel->id,
+            'event' => 'static_panel:'.$channel->purpose,
+            'payload' => $payload,
+            'status' => 'pending',
+        ]);
+
+        try {
+            $response = $channel->static_message_id
+                ? $discord->editChannelMessage($channel->discord_channel_id, $channel->static_message_id, $payload)
+                : $discord->sendChannelMessage($channel->discord_channel_id, $payload);
+
+            $channel->update([
+                'static_message_id' => (string) ($response['id'] ?? $channel->static_message_id),
+                'static_message_updated_at' => now(),
+            ]);
+            $delivery->update(['status' => 'sent', 'sent_at' => now()]);
+        } catch (\Throwable $exception) {
+            $delivery->update(['status' => 'failed', 'response' => Str::limit($exception->getMessage(), 1000)]);
+
+            throw $exception;
+        }
+    }
+
     private function discordStaticPanelPayload(string $purpose, CnPulseService $pulse): array
     {
         return match ($purpose) {
             'cn-pulse' => $this->discordPanelPayload(
-                'CN Pulse',
-                'Live overzicht van wat er speelt binnen CN Community.',
+                'CN Pulse - live community center',
+                "Dit vaste bericht is het startpunt voor alles wat nu speelt binnen CN Community.\n\nUpdates uit MijnCN, Awards, Academy, partners en staff komen hier samen.",
                 collect($pulse->statusCards())->map(fn ($card) => [
                     'name' => $card['label'],
                     'value' => $card['value'].' - '.$card['hint'],
@@ -729,41 +780,35 @@ class MijnCnController extends Controller
                 route('mijncn.module', 'pulse')
             ),
             'staff-status' => $this->discordPanelPayload(
-                'Staff status',
-                'Bekijk wie beschikbaar, druk of afwezig is.',
-                [[
-                    'name' => 'Rooster',
-                    'value' => 'Staff kan afwezigheid beheren via MijnCN. Dit paneel wordt bijgewerkt vanuit de website.',
-                    'inline' => false,
-                ]],
+                'Staff Status - planning en beschikbaarheid',
+                'Hier zie je waar staff beschikbaarheid wordt bijgehouden. Nieuwe afwezigheidsmeldingen worden los in dit kanaal gepusht.',
+                $this->staffStatusFields(),
                 route('mijncn.module', 'absences')
             ),
             'awards-info' => $this->discordPanelPayload(
-                'CN Awards 2026',
-                'Nomineren, stemmen, jury en finale draaien via het CN Community Platform.',
+                'CN Awards 2026 - informatiepaneel',
+                'Alle fases van CN Awards worden beheerd via MijnCN: nominaties, controle, stemmen, jury, finale en Hall of Fame.',
                 $this->awardPanelFields(),
                 route('awards')
             ),
             'stem-nu' => $this->discordPanelPayload(
-                'Stemronde',
-                'Wanneer stemmen open is, gebruik je deze knop om direct te stemmen.',
+                'Stem nu - actieve stemronde',
+                'Gebruik dit kanaal voor stemrondes. Als stemmen open staat, blijft dit paneel de directe route naar de juiste pagina.',
                 $this->awardPanelFields('public_vote'),
                 route('awards')
             ),
             'trending', 'leaderboard' => $this->discordPanelPayload(
                 $purpose === 'trending' ? 'Trending nominaties' : 'Awards leaderboard',
-                'Actuele top op basis van stemmen en nominatie-activiteit.',
+                $purpose === 'trending'
+                    ? 'Populaire nominaties en opvallende communitybewegingen.'
+                    : 'Actuele ranglijst op basis van geldige stemmen en reputatie.',
                 $this->topNominationFields(),
                 route('awards')
             ),
             'award-logs' => $this->discordPanelPayload(
-                'Award logboek',
-                'Interne awardstatus: reviews, merges, jury en publicaties.',
-                [[
-                    'name' => 'Status',
-                    'value' => 'Logs worden los gepusht. Dit vaste paneel markeert het kanaal als actief.',
-                    'inline' => false,
-                ]],
+                'Award Logs - beheerfeed',
+                'Interne updates voor reviews, goedkeuringen, merges, juryrapporten en publicaties. Gebruik dit kanaal als auditfeed voor het awardteam.',
+                $this->awardLogFields(),
                 route('staff.awards')
             ),
         };
@@ -829,6 +874,63 @@ class MijnCnController extends Controller
         ]];
     }
 
+    private function staffStatusFields(): array
+    {
+        $activeStaff = User::whereNot('role', 'member')->count();
+        $absentNow = Schema::hasTable('absence_requests') ? AbsenceRequest::current()->count() : 0;
+        $nextAbsence = Schema::hasTable('absence_requests')
+            ? AbsenceRequest::with('user')
+                ->where('status', 'approved')
+                ->when(
+                    Schema::hasColumns('absence_requests', ['starts_at', 'ends_at']),
+                    fn ($query) => $query->where('starts_at', '>=', now()),
+                    fn ($query) => $query->whereDate('starts_on', '>=', today())
+                )
+                ->orderBy(Schema::hasColumn('absence_requests', 'starts_at') ? 'starts_at' : 'starts_on')
+                ->first()
+            : null;
+
+        return [[
+            'name' => 'Staffleden',
+            'value' => (string) $activeStaff,
+            'inline' => true,
+        ], [
+            'name' => 'Nu afwezig',
+            'value' => (string) $absentNow,
+            'inline' => true,
+        ], [
+            'name' => 'Volgende melding',
+            'value' => $nextAbsence
+                ? ($nextAbsence->user?->name ?: 'Stafflid').' vanaf '.($nextAbsence->starts_at ?? $nextAbsence->starts_on)->translatedFormat('d M H:i')
+                : 'Geen geplande afwezigheid.',
+            'inline' => false,
+        ]];
+    }
+
+    private function awardLogFields(): array
+    {
+        $edition = AwardEdition::where('type', 'cn_awards')->latest('year')->first();
+        if (!$edition) {
+            return [['name' => 'Logboek', 'value' => 'Nog geen editie actief.', 'inline' => false]];
+        }
+
+        $query = Nomination::whereHas('category', fn ($category) => $category->where('award_edition_id', $edition->id));
+
+        return [[
+            'name' => 'In behandeling',
+            'value' => (string) (clone $query)->where('status', 'pending')->count(),
+            'inline' => true,
+        ], [
+            'name' => 'Goedgekeurd',
+            'value' => (string) (clone $query)->whereIn('status', ['approved', 'finalist', 'winner'])->count(),
+            'inline' => true,
+        ], [
+            'name' => 'Afgekeurd / dubbel',
+            'value' => (string) (clone $query)->whereIn('status', ['rejected', 'duplicate'])->count(),
+            'inline' => true,
+        ]];
+    }
+
     private function topNominationFields(): array
     {
         if (!Schema::hasTable('nominations')) {
@@ -853,6 +955,46 @@ class MijnCnController extends Controller
         ])->all();
     }
 
+    private function enrichPartnerFromDiscord(array $data, Request $request, ?Partner $partner = null): array
+    {
+        $invite = $data['discord_invite'] ?? null;
+        if (!$invite && isset($data['website']) && app(DiscordInviteMetadataService::class)->inviteCode($data['website'])) {
+            $invite = $data['website'];
+        }
+        if (!$invite && isset($data['discord_id']) && app(DiscordInviteMetadataService::class)->inviteCode($data['discord_id'])) {
+            $invite = $data['discord_id'];
+        }
+        if (!$invite) {
+            return $data;
+        }
+
+        $meta = app(DiscordInviteMetadataService::class)->enrich($invite);
+        if (!$meta) {
+            return $data;
+        }
+
+        $data['discord_invite'] = $meta['discord_invite'] ?? $invite;
+        $data['discord_id'] = $meta['discord_guild_id'] ?? $data['discord_id'] ?? $partner?->discord_id;
+
+        if (empty($data['description']) && !empty($meta['description'])) {
+            $data['description'] = Str::limit($meta['description'], 240, '');
+        }
+        if (!$request->hasFile('logo') && empty($data['logo']) && empty($partner?->logo) && !empty($meta['logo_url'])) {
+            $data['logo'] = $meta['logo_url'];
+        }
+        if (empty($data['banner_url']) && !empty($meta['banner_url'])) {
+            $data['banner_url'] = $meta['banner_url'];
+        }
+        if (!empty($meta['member_count'])) {
+            $data['member_count'] = (int) $meta['member_count'];
+        }
+        if (!empty($meta['online_count'])) {
+            $data['online_count'] = (int) $meta['online_count'];
+        }
+
+        return $data;
+    }
+
     private function validatePartner(Request $request, ?Partner $partner = null): array
     {
         $rules = [
@@ -871,6 +1013,10 @@ class MijnCnController extends Controller
             'score' => ['required', 'integer', 'min:0', 'max:100'],
             'position' => ['required', 'integer', 'min:1', 'max:999'],
             'is_featured' => ['nullable', 'boolean'],
+            'discord_invite' => ['nullable', 'url', 'max:255'],
+            'banner_url' => ['nullable', 'url', 'max:500'],
+            'member_count' => ['nullable', 'integer', 'min:0'],
+            'online_count' => ['nullable', 'integer', 'min:0'],
         ] as $column => $rule) {
             if (Schema::hasColumn('partners', $column)) {
                 $rules[$column] = $rule;

@@ -58,6 +58,10 @@ class AwardService
                 'motivation' => $data['motivation'],
                 'evidence_url' => $data['evidence_url'] ?? null,
                 'evidence_text' => $data['evidence_text'] ?? null,
+                'logo_url' => $data['logo_url'] ?? null,
+                'banner_url' => $data['banner_url'] ?? null,
+                'website_url' => $data['website_url'] ?? null,
+                'discord_invite' => $data['discord_invite'] ?? null,
                 'status' => 'duplicate',
                 'canonical_nomination_id' => $existingCandidate->id,
                 'spam_score' => $this->spamScore($data),
@@ -92,6 +96,10 @@ class AwardService
             'motivation' => $data['motivation'],
             'evidence_url' => $data['evidence_url'] ?? null,
             'evidence_text' => $data['evidence_text'] ?? null,
+            'logo_url' => $data['logo_url'] ?? null,
+            'banner_url' => $data['banner_url'] ?? null,
+            'website_url' => $data['website_url'] ?? null,
+            'discord_invite' => $data['discord_invite'] ?? null,
             'spam_score' => $this->spamScore($data),
         ]);
     }

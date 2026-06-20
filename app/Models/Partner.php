@@ -8,7 +8,8 @@ use Illuminate\Support\Facades\Storage;
 class Partner extends Model
 {
     protected $fillable = [
-        'name', 'slug', 'description', 'website', 'discord_id', 'contact_name',
+        'name', 'slug', 'description', 'website', 'discord_id', 'discord_invite',
+        'banner_url', 'member_count', 'online_count', 'contact_name',
         'contact_email', 'logo', 'status', 'tier', 'category', 'score',
         'position', 'is_featured', 'last_promotion_at', 'notes',
     ];
@@ -20,6 +21,8 @@ class Partner extends Model
             'is_featured' => 'boolean',
             'score' => 'integer',
             'position' => 'integer',
+            'member_count' => 'integer',
+            'online_count' => 'integer',
         ];
     }
 

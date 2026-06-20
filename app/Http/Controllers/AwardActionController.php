@@ -6,6 +6,7 @@ use App\Enums\UserRole;
 use App\Models\AwardCategory;
 use App\Models\Nomination;
 use App\Services\AwardService;
+use App\Services\DiscordInviteMetadataService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -13,7 +14,7 @@ use Illuminate\View\View;
 
 class AwardActionController extends Controller
 {
-    public function nominate(Request $request, AwardCategory $category, AwardService $awards)
+    public function nominate(Request $request, AwardCategory $category, AwardService $awards, DiscordInviteMetadataService $discordInvites)
     {
         $data = $request->validate([
             'nominee_name' => ['required', 'string', 'max:100'],
@@ -21,8 +22,10 @@ class AwardActionController extends Controller
             'motivation' => ['required', 'string', 'min:40', 'max:2000'],
             'evidence_url' => ['nullable', 'url', 'max:255'],
             'evidence_text' => ['nullable', 'string', 'max:2000'],
+            'discord_invite' => ['nullable', 'url', 'max:255'],
         ]);
 
+        $data = $this->enrichNominationFromDiscord($data, $discordInvites);
         $awards->nominate($request->user(), $category, $data);
 
         return back()->with('success', 'Je nominatie is ontvangen en wacht op beoordeling.');
@@ -50,7 +53,7 @@ class AwardActionController extends Controller
         return view('dashboard.nomination-edit', compact('nomination'));
     }
 
-    public function updateProfile(Request $request, Nomination $nomination): RedirectResponse
+    public function updateProfile(Request $request, Nomination $nomination, DiscordInviteMetadataService $discordInvites): RedirectResponse
     {
         $this->authorizeProfileManagement($request, $nomination);
 
@@ -73,6 +76,7 @@ class AwardActionController extends Controller
                 );
             }
         }
+        $data = $this->enrichNominationFromDiscord($data, $discordInvites);
 
         $nomination->update([
             'nominee_name' => $data['nominee_name'],
@@ -87,6 +91,31 @@ class AwardActionController extends Controller
         return redirect()
             ->route('mijncn.nominations.edit', $nomination)
             ->with('success', 'Je nominatieprofiel is bijgewerkt.');
+    }
+
+    private function enrichNominationFromDiscord(array $data, DiscordInviteMetadataService $discordInvites): array
+    {
+        $invite = $data['discord_invite'] ?? $data['evidence_url'] ?? null;
+        if (!$discordInvites->inviteCode($invite)) {
+            return $data;
+        }
+
+        $meta = $discordInvites->enrich($invite);
+        if (!$meta) {
+            return $data;
+        }
+
+        $data['discord_invite'] = $meta['discord_invite'] ?? $invite;
+        $data['nominee_discord_id'] = $data['nominee_discord_id'] ?? $meta['discord_guild_id'] ?? null;
+        $data['logo_url'] = $data['logo_url'] ?? $meta['logo_url'] ?? null;
+        $data['banner_url'] = $data['banner_url'] ?? $meta['banner_url'] ?? null;
+        $data['website_url'] = $data['website_url'] ?? $meta['discord_invite'] ?? null;
+
+        if (($data['nominee_name'] ?? '') === '' && !empty($meta['name'])) {
+            $data['nominee_name'] = $meta['name'];
+        }
+
+        return $data;
     }
 
     private function authorizeProfileManagement(Request $request, Nomination $nomination): void

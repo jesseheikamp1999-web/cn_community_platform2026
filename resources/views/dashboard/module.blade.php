@@ -472,7 +472,10 @@
             <div class="module-card-heading">
                 <div><span>DISCORD CATEGORIEËN</span><h2>Nieuwe kanaalindeling</h2></div>
                 @if($discordReady)
-                    <form method="post" action="{{ route('mijncn.discord.automation') }}">@csrf<button class="text-action">Automatisering draaien</button></form>
+                    <div class="header-actions">
+                        <form method="post" action="{{ route('mijncn.discord.panels') }}">@csrf<button class="text-action">Vaste panelen bijwerken</button></form>
+                        <form method="post" action="{{ route('mijncn.discord.automation') }}">@csrf<button class="text-action">Automatisering draaien</button></form>
+                    </div>
                 @endif
             </div>
             <div class="discord-category-grid">
@@ -555,6 +558,10 @@
                     <label>Naam<input name="name" required maxlength="80" placeholder="Bijvoorbeeld NightMC"></label>
                     <label>Website of Discord link<input name="website" type="url" placeholder="https://discord.gg/..."></label>
                     @if($rankingReady)
+                        <label>Discord invite<input name="discord_invite" type="url" placeholder="https://discord.gg/..."></label>
+                        <label>Banner URL<input name="banner_url" type="url" placeholder="Wordt automatisch gevuld"></label>
+                    @endif
+                    @if($rankingReady)
                         <label>Type<select name="category"><option value="server">Server</option><option value="project">Project</option><option value="partner">Partner</option><option value="creator">Creator</option></select></label>
                     @endif
                     <label>Status<select name="status"><option value="active">Actief</option><option value="pending">In aanvraag</option><option value="warning">Waarschuwing</option><option value="ended">Gestopt</option><option value="lead">Lead</option></select></label>
@@ -600,6 +607,10 @@
                             <textarea name="description" rows="2" maxlength="240" placeholder="Omschrijving">{{ $partner->description }}</textarea>
                         @endif
                         <input name="website" type="url" value="{{ $partner->website }}" placeholder="Website of Discord link">
+                        @if($rankingReady)
+                            <input name="discord_invite" type="url" value="{{ $partner->discord_invite }}" placeholder="Discord invite">
+                            <input name="banner_url" type="url" value="{{ $partner->banner_url }}" placeholder="Banner URL">
+                        @endif
                         <div class="module-form-grid small-grid">
                             @if($rankingReady)
                                 <select name="category"><option value="server" @selected($partner->category === 'server')>Server</option><option value="project" @selected($partner->category === 'project')>Project</option><option value="partner" @selected($partner->category === 'partner')>Partner</option><option value="creator" @selected($partner->category === 'creator')>Creator</option></select>

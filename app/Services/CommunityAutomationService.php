@@ -5,6 +5,8 @@ namespace App\Services;
 use App\Models\AutomationLog;
 use App\Models\AwardEdition;
 use App\Models\AwardRound;
+use App\Models\AbsenceRequest;
+use App\Models\Content;
 use App\Models\DiscordChannel;
 use App\Models\DiscordDelivery;
 use App\Models\User;
@@ -25,7 +27,99 @@ class CommunityAutomationService
         return [
             'award_phases' => $this->processAwardPhases(),
             'birthdays' => $this->processBirthdays(),
+            'news' => $this->processPublishedNews(),
+            'staff_status' => $this->processStaffStatus(),
         ];
+    }
+
+    public function announceNews(Content $content): bool
+    {
+        if ($content->type !== 'news' || $content->status !== 'published' || $content->published_at?->gt(now())) {
+            return false;
+        }
+
+        $key = 'news:published:'.$content->id.':'.$content->updated_at?->timestamp;
+        if (!$this->claim($key, 'news_published', ['content_id' => $content->id])) {
+            return false;
+        }
+
+        $source = (string) data_get($content->meta, 'source', 'CN Community');
+        $payload = [
+            'content' => null,
+            'embeds' => [[
+                'title' => $content->title,
+                'description' => Str::limit($content->excerpt ?: strip_tags($content->body), 240),
+                'url' => route('news.show', $content),
+                'color' => 14883619,
+                'author' => ['name' => $source.' nieuws'],
+                'image' => $content->cover_image ? ['url' => $content->cover_image] : null,
+                'footer' => ['text' => 'CN Community nieuws - automatisch gepubliceerd'],
+                'timestamp' => ($content->published_at ?? now())->toIso8601String(),
+            ]],
+            'components' => [[
+                'type' => 1,
+                'components' => [[
+                    'type' => 2,
+                    'style' => 5,
+                    'label' => 'Lees bericht',
+                    'url' => route('news.show', $content),
+                ]],
+            ]],
+        ];
+        $payload['embeds'][0] = array_filter($payload['embeds'][0], fn ($value) => $value !== null);
+
+        $this->sendDiscord('nieuws', $payload);
+
+        return true;
+    }
+
+    public function announceAbsence(AbsenceRequest $absence): bool
+    {
+        $absence->loadMissing('user');
+        if ($absence->status !== 'approved') {
+            return false;
+        }
+
+        $startsAt = $absence->starts_at ?? $absence->starts_on?->startOfDay();
+        $endsAt = $absence->ends_at ?? $absence->ends_on?->endOfDay();
+        $key = 'staff-status:absence:'.$absence->id.':'.$absence->updated_at?->timestamp;
+        if (!$startsAt || !$endsAt || !$this->claim($key, 'staff_absence', ['absence_id' => $absence->id])) {
+            return false;
+        }
+
+        $name = $absence->user?->name ?: 'Een stafflid';
+        $reason = trim(preg_replace('/^\[[^\]]+\]\s*/', '', (string) $absence->reason));
+
+        $this->sendDiscord('staff-status', [
+            'content' => null,
+            'embeds' => [[
+                'title' => $name.' is tijdelijk niet beschikbaar',
+                'description' => $reason !== '' ? $reason : 'Geen toelichting opgegeven.',
+                'color' => 14883619,
+                'fields' => [[
+                    'name' => 'Periode',
+                    'value' => $startsAt->translatedFormat('d F Y H:i').' - '.$endsAt->translatedFormat('d F Y H:i'),
+                    'inline' => false,
+                ], [
+                    'name' => 'Planning',
+                    'value' => 'Bekijk het volledige teamrooster in MijnCN.',
+                    'inline' => false,
+                ]],
+                'footer' => ['text' => 'CN Staff Status - automatisch bijgewerkt'],
+                'timestamp' => now()->toIso8601String(),
+            ]],
+            'components' => [[
+                'type' => 1,
+                'components' => [[
+                    'type' => 2,
+                    'style' => 5,
+                    'label' => 'Open rooster',
+                    'url' => route('mijncn.module', 'absences'),
+                ]],
+            ]],
+        ]);
+
+        return true;
     }
 
     public function processAwardPhases(): int
@@ -130,6 +224,53 @@ class CommunityAutomationService
             }
             $processed++;
         }
+
+        return $processed;
+    }
+
+    public function processPublishedNews(): int
+    {
+        if (!Schema::hasTable('contents')) {
+            return 0;
+        }
+
+        $processed = 0;
+        Content::published()
+            ->where('type', 'news')
+            ->latest('published_at')
+            ->limit(20)
+            ->get()
+            ->each(function (Content $content) use (&$processed): void {
+                if ($this->announceNews($content)) {
+                    $processed++;
+                }
+            });
+
+        return $processed;
+    }
+
+    public function processStaffStatus(): int
+    {
+        if (!Schema::hasTable('absence_requests')) {
+            return 0;
+        }
+
+        $processed = 0;
+        AbsenceRequest::with('user')
+            ->where('status', 'approved')
+            ->when(
+                Schema::hasColumns('absence_requests', ['starts_at', 'ends_at']),
+                fn ($query) => $query->where('ends_at', '>=', now()->subDay()),
+                fn ($query) => $query->whereDate('ends_on', '>=', today()->subDay())
+            )
+            ->latest(Schema::hasColumn('absence_requests', 'starts_at') ? 'starts_at' : 'starts_on')
+            ->limit(30)
+            ->get()
+            ->each(function (AbsenceRequest $absence) use (&$processed): void {
+                if ($this->announceAbsence($absence)) {
+                    $processed++;
+                }
+            });
 
         return $processed;
     }

@@ -480,7 +480,7 @@
 }
 
 .absence-planner {
-    overflow: hidden;
+    overflow: visible;
     padding: 18px;
     border: 1px solid #e4e6ea;
     border-radius: 16px;
@@ -553,7 +553,7 @@
 
 .absence-hours {
     display: grid;
-    grid-template-columns: 78px repeat(24, minmax(14px, 1fr));
+    grid-template-columns: 70px repeat(24, minmax(0, 1fr));
     gap: 2px;
     margin-bottom: 4px;
 }
@@ -565,39 +565,41 @@
 .absence-hours span {
     text-align: center;
     color: #6f737c;
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 800;
 }
 
 .absence-grid {
     display: grid;
-    grid-template-columns: 78px 1fr;
+    grid-template-columns: 70px minmax(0, 1fr);
     gap: 2px 4px;
 }
 
 .absence-day-label {
     display: grid;
-    grid-template-columns: 34px 1fr;
+    grid-template-columns: 28px 1fr;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
     min-height: 34px;
-    padding: 0 8px;
+    padding: 0 6px;
     border-radius: 6px;
     background: #f2a300;
     color: #fff;
-    font-size: 14px;
+    font-size: 12px;
     font-weight: 900;
     text-transform: lowercase;
 }
 
 .absence-hour-row {
     display: grid;
-    grid-template-columns: repeat(24, minmax(18px, 1fr));
+    grid-template-columns: repeat(24, minmax(0, 1fr));
     gap: 2px;
+    min-width: 0;
 }
 
 .absence-hour-row button {
-    min-height: 30px;
+    min-width: 0;
+    min-height: 34px;
     border: 0;
     border-radius: 3px;
     background: #eef0f3;
@@ -625,6 +627,10 @@
     font-weight: 700;
 }
 
+.absence-selection.is-error {
+    color: #e21d2b;
+}
+
 .absence-quick-actions {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -640,6 +646,18 @@
     font: 900 24px "Manrope";
     letter-spacing: 1px;
     cursor: pointer;
+}
+
+@media (max-width: 720px) {
+    .absence-planner {
+        padding: 14px;
+        overflow-x: auto;
+    }
+
+    .absence-hours,
+    .absence-grid {
+        min-width: 520px;
+    }
 }
 
 .absence-action.absent {

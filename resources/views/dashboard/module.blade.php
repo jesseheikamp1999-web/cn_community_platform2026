@@ -292,7 +292,7 @@
                             <p class="absence-selection" data-absence-summary>Selecteer in het rooster wanneer je niet beschikbaar bent.</p>
                         </div>
                         <div class="absence-quick-actions">
-                            <button type="button" class="absence-action absent" data-absence-mode="absent">AFWEZIG</button>
+                            <button type="submit" class="absence-action absent">AFWEZIG MELDEN</button>
                             <button type="button" class="absence-action present" data-absence-clear>AANWEZIG</button>
                         </div>
                         <div class="module-form-grid">
@@ -301,7 +301,6 @@
                         </div>
                         <label>Reden<textarea name="reason" rows="5" maxlength="1000" required placeholder="Laat kort weten waarom en wanneer je weer bereikbaar bent.">{{ old('reason') }}</textarea></label>
                         <p class="form-help">Tijdens deze periode staat op de publieke staffpagina automatisch "Niet beschikbaar".</p>
-                        <button class="button button-primary">Afwezig melden</button>
                     </form>
             </section>
             <section class="module-card absence-team-board">

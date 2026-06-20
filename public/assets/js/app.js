@@ -62,6 +62,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let selecting = false;
         let anchor = null;
         let nextSelectionState = true;
+        let selectionSnapshot = new Map();
 
         const cells = () => [...form.querySelectorAll('[data-absence-cell]')];
         const pad = value => String(value).padStart(2, '0');
@@ -116,6 +117,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const all = cells();
             const min = Math.min(from, to);
             const max = Math.max(from, to);
+            all.forEach(cell => {
+                if (cell.disabled) return;
+                cell.classList.toggle('selected', selectionSnapshot.get(cell) === true);
+            });
             all.forEach((cell, index) => {
                 if (index < min || index > max || cell.disabled) return;
                 cell.classList.toggle('selected', nextSelectionState);
@@ -198,6 +203,7 @@ document.addEventListener('DOMContentLoaded', () => {
             selecting = true;
             anchor = indexOf(cell);
             nextSelectionState = !cell.classList.contains('selected');
+            selectionSnapshot = new Map(cells().map(item => [item, item.classList.contains('selected')]));
             selectBetween(anchor, anchor);
         });
         grid?.addEventListener('mouseover', event => {
@@ -209,7 +215,19 @@ document.addEventListener('DOMContentLoaded', () => {
         form.querySelector('[data-absence-clear]')?.addEventListener('click', () => {
             cells().forEach(cell => cell.classList.remove('selected'));
             anchor = null;
+            selectionSnapshot = new Map();
             updateSelection();
+        });
+
+        form.addEventListener('submit', event => {
+            updateSelection();
+            if (!rangesInput.value) {
+                event.preventDefault();
+                summary.textContent = 'Selecteer eerst minimaal één groen vakje in het rooster.';
+                summary.classList.add('is-error');
+                return;
+            }
+            summary.classList.remove('is-error');
         });
 
         refreshWeek();

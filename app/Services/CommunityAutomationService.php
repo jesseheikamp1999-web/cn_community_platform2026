@@ -194,7 +194,11 @@ class CommunityAutomationService
         }
 
         try {
-            $this->discord->sendWebhook($payload, $channel?->webhook_url);
+            if ($channel && ctype_digit($channel->discord_channel_id)) {
+                $this->discord->sendChannelMessage($channel->discord_channel_id, $payload);
+            } else {
+                $this->discord->sendWebhook($payload, $channel?->webhook_url);
+            }
             $delivery?->update(['status' => 'sent', 'sent_at' => now()]);
         } catch (Throwable $exception) {
             $delivery?->update([
@@ -216,7 +220,6 @@ class CommunityAutomationService
 
         return DiscordChannel::where('purpose', $purpose)
             ->where('is_active', true)
-            ->whereNotNull('webhook_url')
             ->first();
     }
 }

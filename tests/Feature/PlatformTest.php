@@ -1005,21 +1005,23 @@ class PlatformTest extends TestCase
             ->assertSee('📰┃nieuws');
     }
 
-    public function test_discord_channel_test_sends_webhook_and_logs_delivery(): void
+    public function test_discord_channel_test_sends_bot_message_and_logs_delivery(): void
     {
-        Http::fake(['discord.test/*' => Http::response(['ok' => true])]);
+        Http::fake(['discord.com/api/v10/channels/*/messages' => Http::response(['id' => 'message-1'])]);
+        config(['services.discord.bot_token' => 'bot-token']);
         $owner = User::factory()->create(['role' => \App\Enums\UserRole::Owner]);
 
         $this->actingAs($owner)->post(route('mijncn.discord.upgrade'));
         $channel = \App\Models\DiscordChannel::where('purpose', 'verjaardagen')->firstOrFail();
-        $channel->update(['webhook_url' => 'https://discord.test/verjaardagen']);
+        $channel->update(['discord_channel_id' => '123456789012345678']);
 
         $this->actingAs($owner)
             ->post(route('mijncn.discord.channel.test', $channel))
             ->assertRedirect()
             ->assertSessionHas('success');
 
-        Http::assertSent(fn ($request) => $request->url() === 'https://discord.test/verjaardagen');
+        Http::assertSent(fn ($request) => $request->url() === 'https://discord.com/api/v10/channels/123456789012345678/messages'
+            && $request->hasHeader('Authorization', 'Bot bot-token'));
         $this->assertDatabaseHas('discord_deliveries', [
             'discord_channel_id' => $channel->id,
             'event' => 'test',

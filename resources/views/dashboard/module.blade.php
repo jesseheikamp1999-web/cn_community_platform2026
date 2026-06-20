@@ -496,8 +496,8 @@
                                 @csrf
                                 <input type="hidden" name="purpose" value="{{ $purpose }}">
                                 <input name="name" value="{{ old('name', $channel?->name ?? $config['name']) }}" required>
-                                <input name="discord_channel_id" value="{{ old('discord_channel_id', $channel?->discord_channel_id ?? $purpose) }}" placeholder="Discord kanaal ID">
-                                <input name="webhook_url" value="{{ old('webhook_url', $channel?->webhook_url) }}" placeholder="Webhook URL">
+                                <input name="discord_channel_id" value="{{ old('discord_channel_id', $channel?->discord_channel_id ?? '') }}" placeholder="Discord kanaal ID">
+                                <input type="hidden" name="webhook_url" value="{{ old('webhook_url', $channel?->webhook_url) }}">
                                 <label><input type="checkbox" name="is_active" value="1" @checked($channel?->is_active ?? true)> Actief</label>
                                 <button class="button button-secondary button-small">Opslaan</button>
                             </form>

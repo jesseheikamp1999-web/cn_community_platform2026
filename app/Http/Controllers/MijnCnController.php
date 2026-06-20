@@ -542,7 +542,7 @@ class MijnCnController extends Controller
             );
         }
 
-        return back()->with('success', 'CN Pulse & Discord-kanalen zijn klaargezet. Vul per kanaal de webhook in en stuur een testbericht.');
+        return back()->with('success', 'CN Pulse & Discord-kanalen zijn klaargezet. Vul per kanaal het Discord kanaal-ID in en stuur een testbericht via de bot.');
     }
 
     public function saveDiscordChannel(Request $request): RedirectResponse
@@ -597,7 +597,7 @@ class MijnCnController extends Controller
         ]);
 
         try {
-            $discord->sendWebhook($payload, $channel->webhook_url);
+            $discord->sendChannelMessage($channel->discord_channel_id, $payload);
             $delivery->update(['status' => 'sent', 'sent_at' => now()]);
         } catch (\Throwable $exception) {
             $delivery->update(['status' => 'failed', 'response' => Str::limit($exception->getMessage(), 1000)]);

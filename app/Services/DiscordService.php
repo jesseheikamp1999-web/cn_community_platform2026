@@ -84,4 +84,20 @@ class DiscordService
 
         Http::post($webhook, $payload)->throw();
     }
+
+    public function sendChannelMessage(string $channelId, array $payload): void
+    {
+        $token = config('services.discord.bot_token');
+        if (!$token) {
+            throw new RuntimeException('Geen Discord bot token geconfigureerd.');
+        }
+
+        if ($channelId === '' || !ctype_digit($channelId)) {
+            throw new RuntimeException('Geen geldig Discord kanaal-ID ingesteld.');
+        }
+
+        Http::withHeaders(['Authorization' => 'Bot '.$token])
+            ->post("https://discord.com/api/v10/channels/{$channelId}/messages", $payload)
+            ->throw();
+    }
 }

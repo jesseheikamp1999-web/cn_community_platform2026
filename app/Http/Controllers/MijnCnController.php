@@ -18,6 +18,7 @@ use App\Services\CnPulseService;
 use App\Services\CommunityAutomationService;
 use App\Services\DiscordInviteMetadataService;
 use App\Services\DiscordService;
+use App\Services\DiscordSyncService;
 use App\Services\NomiAiService;
 use App\Services\TaskWorkflowService;
 use Carbon\Carbon;
@@ -198,6 +199,7 @@ class MijnCnController extends Controller
         } elseif ($module === 'discord') {
             abort_unless($this->canManageDiscord($user), 403);
             $pulse = app(CnPulseService::class);
+            $sync = app(DiscordSyncService::class);
             $data['discordReady'] = Schema::hasTable('discord_channels') && Schema::hasTable('discord_deliveries');
             $data['discordChannels'] = $data['discordReady']
                 ? DiscordChannel::orderBy('purpose')->get()->keyBy('purpose')
@@ -208,6 +210,11 @@ class MijnCnController extends Controller
             $data['discordPurposes'] = $this->discordPurposeDefinitions();
             $data['pulseItems'] = $pulse->feed(8);
             $data['statusCards'] = $pulse->statusCards();
+            $data['discordSyncItems'] = collect($sync->items())->take(12);
+            $data['discordSyncPanels'] = $sync->activePanels();
+            $data['discordSyncRequests'] = $sync->latestRequests(8);
+            $data['discordSyncLastRequest'] = $sync->lastRequest();
+            $data['discordSyncKeyHint'] = $sync->maskedApiKey();
         } elseif ($module === 'partners') {
             abort_unless($this->canManagePartners($user), 403);
             $partnerQuery = Partner::query();
@@ -560,6 +567,18 @@ class MijnCnController extends Controller
                 $table->enum('status', ['pending', 'sent', 'failed'])->default('pending');
                 $table->text('response')->nullable();
                 $table->timestamp('sent_at')->nullable();
+                $table->timestamps();
+            });
+        }
+
+        if (!Schema::hasTable('discord_sync_requests')) {
+            Schema::create('discord_sync_requests', function (Blueprint $table) {
+                $table->id();
+                $table->string('api_key_hint')->nullable();
+                $table->boolean('success')->default(false);
+                $table->unsignedInteger('item_count')->default(0);
+                $table->text('error_message')->nullable();
+                $table->timestamp('requested_at')->index();
                 $table->timestamps();
             });
         }

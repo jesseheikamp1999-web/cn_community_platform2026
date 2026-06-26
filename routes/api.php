@@ -1,7 +1,10 @@
 <?php
 
 use App\Http\Controllers\Api\PlatformController;
+use App\Http\Controllers\Api\DiscordSyncController;
 use Illuminate\Support\Facades\Route;
+
+Route::get('/discord-sync', DiscordSyncController::class);
 
 Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::get('/mijncn/profile', [PlatformController::class, 'profile'])->middleware('abilities:mijncn:read');

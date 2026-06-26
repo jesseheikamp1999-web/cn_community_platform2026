@@ -484,6 +484,47 @@
                 <article><span>🏆 | AWARDS</span><p>#🏆┃awards-info<br>#🗳️┃stem-nu<br>#🔥┃trending<br>#📈┃leaderboard<br>#📥┃award-logs</p></article>
             </div>
         </section>
+        <section class="module-card discord-sync-card">
+            <div class="module-card-heading">
+                <div><span>BOT API</span><h2>Discord Sync API</h2></div>
+                <code>{{ url('/api/discord-sync') }}</code>
+            </div>
+            <div class="discord-sync-overview">
+                <article><span>API key</span><strong>{{ $discordSyncKeyHint ?? 'Niet ingesteld' }}</strong><small>Header: x-api-key</small></article>
+                <article><span>Laatste request</span><strong>{{ $discordSyncLastRequest?->requested_at?->diffForHumans() ?? 'Nog geen request' }}</strong><small>{{ $discordSyncLastRequest ? ($discordSyncLastRequest->success ? 'Succes' : 'Fout') : 'Wacht op bot' }}</small></article>
+                <article><span>Laatste items</span><strong>{{ $discordSyncLastRequest?->item_count ?? 0 }}</strong><small>gegenereerd voor bot</small></article>
+            </div>
+            <div class="discord-sync-columns">
+                <div>
+                    <h3>Actieve panelen</h3>
+                    <div class="module-list compact-list">
+                        @forelse($discordSyncPanels ?? [] as $panel)
+                            <article><div><strong>{{ $panel['key'] }}</strong><p>{{ $panel['active'] ? 'Actief' : 'Uitgeschakeld' }} @if($panel['message_id']) &middot; message {{ $panel['message_id'] }} @endif</p></div><span class="status status-{{ $panel['active'] ? 'approved' : 'controle' }}">{{ $panel['active'] ? 'actief' : 'uit' }}</span></article>
+                        @empty
+                            <div class="module-empty"><h3>Nog geen panelen</h3><p>Klik op Database bijwerken.</p></div>
+                        @endforelse
+                    </div>
+                </div>
+                <div>
+                    <h3>Laatste sync-items</h3>
+                    <div class="module-list compact-list">
+                        @forelse($discordSyncItems ?? [] as $item)
+                            <article><div><strong>{{ $item['type'] }} @if(isset($item['key'])) &middot; {{ $item['key'] }} @elseif(isset($item['id'])) &middot; {{ $item['id'] }} @endif</strong><p>{{ data_get($item, 'payload.title', $item['title'] ?? 'Geen titel') }}</p></div><span class="status status-approved">{{ $item['type'] }}</span></article>
+                        @empty
+                            <div class="module-empty"><h3>Geen items</h3><p>Er staat niets klaar voor de bot.</p></div>
+                        @endforelse
+                    </div>
+                </div>
+            </div>
+            <div class="module-list compact-list">
+                <h3>API requests</h3>
+                @forelse($discordSyncRequests ?? [] as $requestLog)
+                    <article><div><strong>{{ $requestLog->requested_at->translatedFormat('d M H:i:s') }}</strong><p>{{ $requestLog->error_message ?: 'Geen foutmelding.' }}</p></div><span class="status status-{{ $requestLog->success ? 'approved' : 'rejected' }}">{{ $requestLog->success ? 'success' : 'failed' }}</span></article>
+                @empty
+                    <div class="module-empty"><h3>Nog geen API requests</h3><p>De bot heeft het endpoint nog niet opgehaald.</p></div>
+                @endforelse
+            </div>
+        </section>
         <section class="module-card">
             <div class="module-card-heading"><div><span>BOT PUSHES</span><h2>Kanalen koppelen</h2></div></div>
             <div class="discord-channel-list">

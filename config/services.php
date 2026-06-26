@@ -23,6 +23,9 @@ return [
         'discord_invite' => env('CN_DISCORD_INVITE'),
         'twitch_url' => env('CN_TWITCH_URL'),
     ],
+    'discord_sync' => [
+        'api_key' => env('DISCORD_SYNC_API_KEY'),
+    ],
     'nomi' => [
         'endpoint' => env('NOMI_AI_ENDPOINT'),
         'token' => env('NOMI_AI_TOKEN'),

@@ -1066,6 +1066,67 @@ class PlatformTest extends TestCase
         ]);
     }
 
+    public function test_discord_sync_api_requires_valid_api_key(): void
+    {
+        config(['services.discord_sync.api_key' => 'secret-sync-key']);
+
+        $this->getJson('/api/discord-sync')
+            ->assertStatus(401)
+            ->assertJson([
+                'success' => false,
+                'message' => 'Ongeldige API-sleutel.',
+            ]);
+
+        $this->assertDatabaseHas('discord_sync_requests', [
+            'success' => 0,
+            'error_message' => 'Ongeldige API-sleutel.',
+        ]);
+    }
+
+    public function test_discord_sync_api_returns_panel_items_and_logs_request(): void
+    {
+        config(['services.discord_sync.api_key' => 'secret-sync-key']);
+
+        $response = $this->withHeader('x-api-key', 'secret-sync-key')
+            ->getJson('/api/discord-sync')
+            ->assertOk()
+            ->assertJson(['success' => true])
+            ->json();
+
+        $this->assertIsArray($response['items']);
+        $this->assertNotEmpty($response['items']);
+        $this->assertTrue(collect($response['items'])->contains(
+            fn (array $item) => ($item['type'] ?? null) === 'panel'
+                && ($item['key'] ?? null) === 'cn-pulse'
+                && str_starts_with((string) ($item['version'] ?? ''), 'v')
+                && data_get($item, 'payload.title') === 'CN Pulse'
+        ));
+        $this->assertDatabaseHas('discord_sync_requests', [
+            'success' => 1,
+            'api_key_hint' => 'secr...-key',
+        ]);
+    }
+
+    public function test_owner_can_view_discord_sync_api_status_in_mijncn(): void
+    {
+        config(['services.discord_sync.api_key' => 'secret-sync-key']);
+        $owner = User::factory()->create(['role' => \App\Enums\UserRole::Owner]);
+
+        $this->actingAs($owner)
+            ->post(route('mijncn.discord.upgrade'))
+            ->assertRedirect();
+
+        $this->withHeader('x-api-key', 'secret-sync-key')->getJson('/api/discord-sync')->assertOk();
+
+        $this->actingAs($owner)
+            ->get(route('mijncn.module', 'discord'))
+            ->assertOk()
+            ->assertSee('Discord Sync API')
+            ->assertSee('/api/discord-sync')
+            ->assertSee('secr...-key')
+            ->assertSee('cn-pulse');
+    }
+
     public function test_community_directory_only_lists_discord_connected_mijncn_users(): void
     {
         $viewer = User::factory()->create(['discord_id' => 'viewer-discord']);

@@ -1095,15 +1095,46 @@ class PlatformTest extends TestCase
 
         $this->assertIsArray($response['items']);
         $this->assertNotEmpty($response['items']);
+        $this->assertArrayHasKey('generated_at', $response);
+        $this->assertArrayHasKey('refresh_after_seconds', $response);
         $this->assertTrue(collect($response['items'])->contains(
             fn (array $item) => ($item['type'] ?? null) === 'panel'
                 && ($item['key'] ?? null) === 'cn-pulse'
                 && str_starts_with((string) ($item['version'] ?? ''), 'v')
                 && data_get($item, 'payload.title') === 'CN Pulse'
+                && isset($item['changed'])
         ));
         $this->assertDatabaseHas('discord_sync_requests', [
             'success' => 1,
             'api_key_hint' => 'secr...-key',
+        ]);
+    }
+
+    public function test_discord_sync_api_supports_single_channel_and_known_version(): void
+    {
+        config(['services.discord_sync.api_key' => 'secret-sync-key']);
+
+        $first = $this->withHeader('x-api-key', 'secret-sync-key')
+            ->getJson('/api/discord-sync?channel=awards-info')
+            ->assertOk()
+            ->assertJson(['success' => true])
+            ->json();
+
+        $this->assertSame('awards-info', data_get($first, 'item.key'));
+        $this->assertTrue((bool) data_get($first, 'item.changed'));
+
+        $version = (string) data_get($first, 'item.version');
+
+        $second = $this->withHeader('x-api-key', 'secret-sync-key')
+            ->getJson('/api/discord-sync?channel=awards-info&known_version='.$version)
+            ->assertOk()
+            ->assertJson(['success' => true])
+            ->json();
+
+        $this->assertFalse((bool) data_get($second, 'item.changed'));
+        $this->assertDatabaseHas('discord_sync_requests', [
+            'channel_key' => 'awards-info',
+            'status_code' => 200,
         ]);
     }
 
@@ -1125,6 +1156,37 @@ class PlatformTest extends TestCase
             ->assertSee('/api/discord-sync')
             ->assertSee('secr...-key')
             ->assertSee('cn-pulse');
+    }
+
+    public function test_owner_can_customize_discord_sync_panel_settings(): void
+    {
+        config(['services.discord_sync.api_key' => 'secret-sync-key']);
+        $owner = User::factory()->create(['role' => \App\Enums\UserRole::Owner]);
+
+        $this->actingAs($owner)->post(route('mijncn.discord.upgrade'))->assertRedirect();
+
+        $this->actingAs($owner)
+            ->put(route('mijncn.discord.sync.update', 'awards-info'), [
+                'title' => 'CN Awards Live',
+                'description' => 'Alle fases en updates voor de awards-bot.',
+                'button_label' => 'Open awards',
+                'button_url' => route('awards'),
+                'secondary_button_label' => 'MijnCN',
+                'secondary_button_url' => route('dashboard'),
+                'refresh_after_seconds' => 600,
+                'is_active' => '1',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $response = $this->withHeader('x-api-key', 'secret-sync-key')
+            ->getJson('/api/discord-sync?channel=awards-info')
+            ->assertOk()
+            ->json();
+
+        $this->assertSame('CN Awards Live', data_get($response, 'item.payload.title'));
+        $this->assertSame('Alle fases en updates voor de awards-bot.', data_get($response, 'item.payload.description'));
+        $this->assertSame(600, data_get($response, 'item.refresh_after_seconds'));
     }
 
     public function test_community_directory_only_lists_discord_connected_mijncn_users(): void

@@ -499,7 +499,7 @@
                     <h3>Actieve panelen</h3>
                     <div class="module-list compact-list">
                         @forelse($discordSyncPanels ?? [] as $panel)
-                            <article><div><strong>{{ $panel['key'] }}</strong><p>{{ $panel['active'] ? 'Actief' : 'Uitgeschakeld' }} @if($panel['message_id']) &middot; message {{ $panel['message_id'] }} @endif</p></div><span class="status status-{{ $panel['active'] ? 'approved' : 'controle' }}">{{ $panel['active'] ? 'actief' : 'uit' }}</span></article>
+                            <article><div><strong>{{ $panel['title'] ?? $panel['key'] }}</strong><p><code>{{ $panel['key'] }}</code> · {{ $panel['active'] ? 'Actief' : 'Uitgeschakeld' }} · refresh {{ $panel['refresh_after_seconds'] ?? 300 }}s @if($panel['channel_id']) · kanaal {{ $panel['channel_id'] }} @endif @if($panel['message_id']) · message {{ $panel['message_id'] }} @endif</p></div><span class="status status-{{ $panel['active'] ? 'approved' : 'controle' }}">{{ $panel['active'] ? 'actief' : 'uit' }}</span></article>
                         @empty
                             <div class="module-empty"><h3>Nog geen panelen</h3><p>Klik op Database bijwerken.</p></div>
                         @endforelse
@@ -516,13 +516,61 @@
                     </div>
                 </div>
             </div>
+            <div class="discord-sync-columns">
+                <div>
+                    <h3>Endpoint voorbeelden</h3>
+                    <div class="module-list compact-list">
+                        <article><div><strong>Volledige sync</strong><p><code>{{ $discordSyncDiagnostics['all_url'] ?? url('/api/discord-sync?channel=all') }}</code></p></div><span class="status status-approved">all</span></article>
+                        <article><div><strong>Enkel paneel</strong><p><code>{{ $discordSyncDiagnostics['single_channel_example'] ?? url('/api/discord-sync?channel=awards-info') }}</code></p></div><span class="status status-approved">single</span></article>
+                        <article><div><strong>Refresh</strong><p>Standaard {{ $discordSyncDiagnostics['default_refresh_after_seconds'] ?? 300 }} seconden · {{ $discordSyncDiagnostics['active_panels'] ?? 0 }} actieve panelen</p></div><span class="status status-approved">meta</span></article>
+                    </div>
+                </div>
+                <div>
+                    <h3>Bot headers</h3>
+                    <div class="module-list compact-list">
+                        <article><div><strong>x-api-key</strong><p>Gebruik dezelfde sleutel als in de botconfig en server `.env`.</p></div><span class="status status-approved">required</span></article>
+                        <article><div><strong>known_version</strong><p>Bij `channel=awards-info` kun je de laatst bekende versie meesturen voor snelle `changed` checks.</p></div><span class="status status-approved">optional</span></article>
+                        <article><div><strong>Response</strong><p>JSON only, met `generated_at`, `refresh_after_seconds`, `version` en `payload`.</p></div><span class="status status-approved">json</span></article>
+                    </div>
+                </div>
+            </div>
             <div class="module-list compact-list">
                 <h3>API requests</h3>
                 @forelse($discordSyncRequests ?? [] as $requestLog)
-                    <article><div><strong>{{ $requestLog->requested_at->translatedFormat('d M H:i:s') }}</strong><p>{{ $requestLog->error_message ?: 'Geen foutmelding.' }}</p></div><span class="status status-{{ $requestLog->success ? 'approved' : 'rejected' }}">{{ $requestLog->success ? 'success' : 'failed' }}</span></article>
+                    <article><div><strong>{{ $requestLog->requested_at->translatedFormat('d M H:i:s') }}</strong><p><code>{{ $requestLog->channel_key ?: 'all' }}</code> · status {{ $requestLog->status_code ?? ($requestLog->success ? 200 : 500) }} · {{ $requestLog->error_message ?: 'Geen foutmelding.' }}</p></div><span class="status status-{{ $requestLog->success ? 'approved' : 'rejected' }}">{{ $requestLog->success ? 'success' : 'failed' }}</span></article>
                 @empty
                     <div class="module-empty"><h3>Nog geen API requests</h3><p>De bot heeft het endpoint nog niet opgehaald.</p></div>
                 @endforelse
+            </div>
+        </section>
+        <section class="module-card discord-sync-editor">
+            <div class="module-card-heading">
+                <div><span>PANEEL TEKSTEN</span><h2>Sync panelen beheren</h2></div>
+            </div>
+            <div class="discord-sync-editor-grid">
+                @foreach($discordSyncPanels ?? [] as $panel)
+                    <form method="post" action="{{ route('mijncn.discord.sync.update', $panel['key']) }}" class="discord-sync-panel-form">
+                        @csrf
+                        @method('put')
+                        <div class="discord-sync-panel-head">
+                            <div>
+                                <strong>{{ $panel['title'] ?? $panel['key'] }}</strong>
+                                <p><code>{{ $panel['key'] }}</code></p>
+                            </div>
+                            <label class="check-label"><input type="checkbox" name="is_active" value="1" @checked($panel['active'])> Actief</label>
+                        </div>
+                        <label>Titel<input name="title" maxlength="120" required value="{{ old('title', $panel['title'] ?? $panel['key']) }}"></label>
+                        <label>Beschrijving<textarea name="description" rows="3" maxlength="1000" required>{{ old('description', $panel['description'] ?? '') }}</textarea></label>
+                        <div class="module-form-grid">
+                            <label>Primaire knop<input name="button_label" maxlength="80" required value="{{ old('button_label', $panel['button_label'] ?? 'Open MijnCN') }}"></label>
+                            <label>Primaire URL<input name="button_url" type="url" maxlength="500" required value="{{ old('button_url', $panel['button_url'] ?? route('dashboard')) }}"></label>
+                            <label>Secundaire knop<input name="secondary_button_label" maxlength="80" value="{{ old('secondary_button_label', $panel['secondary_button_label'] ?? '') }}"></label>
+                            <label>Secundaire URL<input name="secondary_button_url" type="url" maxlength="500" value="{{ old('secondary_button_url', $panel['secondary_button_url'] ?? '') }}"></label>
+                            <label>Refresh (sec)<input name="refresh_after_seconds" type="number" min="30" max="3600" required value="{{ old('refresh_after_seconds', $panel['refresh_after_seconds'] ?? 300) }}"></label>
+                        </div>
+                        <button class="button button-secondary button-small">Paneel opslaan</button>
+                    </form>
+                @endforeach
             </div>
         </section>
         <section class="module-card">

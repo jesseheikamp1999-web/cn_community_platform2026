@@ -2191,11 +2191,72 @@
     border-bottom: 0;
 }
 
+.discord-sync-editor-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+    padding: 24px;
+    border-top: 1px solid #eceef2;
+}
+
+.discord-sync-panel-form {
+    display: grid;
+    gap: 12px;
+    padding: 18px;
+    border: 1px solid #eceef2;
+    border-radius: 18px;
+    background: linear-gradient(180deg, #fff, #fafafa);
+}
+
+.discord-sync-panel-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: flex-start;
+}
+
+.discord-sync-panel-head strong {
+    display: block;
+    font: 900 18px "Manrope";
+    color: #05080f;
+}
+
+.discord-sync-panel-head p {
+    margin: 6px 0 0;
+    color: #6f7582;
+}
+
+.discord-sync-panel-form label {
+    display: grid;
+    gap: 6px;
+    color: #05080f;
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.discord-sync-panel-form input:not([type="checkbox"]),
+.discord-sync-panel-form textarea {
+    width: 100%;
+    min-height: 44px;
+    padding: 12px 14px;
+    border: 1px solid #dfe3e8;
+    border-radius: 12px;
+    background: #fff;
+    color: #05080f;
+    font: 500 14px "Manrope";
+}
+
+.discord-sync-panel-form textarea {
+    min-height: 96px;
+    resize: vertical;
+}
+
 @media (max-width: 1100px) {
     .pulse-hero,
     .discord-category-grid,
     .discord-sync-overview,
-    .discord-sync-columns {
+    .discord-sync-columns,
+    .discord-sync-editor-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
@@ -2209,7 +2270,8 @@
     .pulse-hero,
     .discord-category-grid,
     .discord-sync-overview,
-    .discord-sync-columns {
+    .discord-sync-columns,
+    .discord-sync-editor-grid {
         grid-template-columns: 1fr;
     }
 }

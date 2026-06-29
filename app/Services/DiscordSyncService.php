@@ -6,6 +6,7 @@ use App\Models\AbsenceRequest;
 use App\Models\AwardEdition;
 use App\Models\Content;
 use App\Models\DiscordChannel;
+use App\Models\DiscordSyncPanel;
 use App\Models\DiscordSyncRequest;
 use App\Models\Nomination;
 use App\Models\User;
@@ -16,6 +17,35 @@ use Illuminate\Support\Str;
 
 class DiscordSyncService
 {
+    public function response(string $channel = 'all', ?string $knownVersion = null): array
+    {
+        if ($channel === '' || $channel === 'all') {
+            $items = $this->items();
+
+            return [
+                'success' => true,
+                'generated_at' => now()->toIso8601String(),
+                'count' => count($items),
+                'refresh_after_seconds' => $this->defaultRefreshAfterSeconds(),
+                'items' => $items,
+            ];
+        }
+
+        if (!in_array($channel, $this->panelKeys(), true)) {
+            return [
+                'success' => false,
+                'message' => 'Onbekend sync-kanaal.',
+                'available_channels' => $this->panelKeys(),
+            ];
+        }
+
+        return [
+            'success' => true,
+            'generated_at' => now()->toIso8601String(),
+            'item' => $this->panelItem($channel, $knownVersion),
+        ];
+    }
+
     public function items(): array
     {
         return collect()
@@ -34,26 +64,56 @@ class DiscordSyncService
 
     public function activePanels(): Collection
     {
-        if (!Schema::hasTable('discord_channels')) {
-            return collect($this->panelKeys())->map(fn (string $key) => [
-                'key' => $key,
-                'name' => $key,
-                'active' => true,
-                'message_id' => null,
-                'updated_at' => null,
-            ]);
-        }
+        return $this->syncPanels()->map(fn (array $panel) => [
+            'key' => $panel['key'],
+            'name' => $panel['channel_name'],
+            'active' => $panel['channel_active'] && $panel['is_active'],
+            'message_id' => $panel['message_id'],
+            'updated_at' => $panel['updated_at'],
+            'channel_id' => $panel['channel_id'],
+            'refresh_after_seconds' => $panel['refresh_after_seconds'],
+            'title' => $panel['title'],
+            'description' => $panel['description'],
+            'button_label' => $panel['button_label'],
+            'button_url' => $panel['button_url'],
+            'secondary_button_label' => $panel['secondary_button_label'],
+            'secondary_button_url' => $panel['secondary_button_url'],
+        ]);
+    }
 
-        return DiscordChannel::whereIn('purpose', $this->panelKeys())
-            ->orderBy('purpose')
-            ->get()
-            ->map(fn (DiscordChannel $channel) => [
-                'key' => $channel->purpose,
-                'name' => $channel->name,
-                'active' => $channel->is_active,
-                'message_id' => $channel->static_message_id,
-                'updated_at' => $channel->static_message_updated_at,
-            ]);
+    public function syncPanels(): Collection
+    {
+        $settings = Schema::hasTable('discord_sync_panels')
+            ? DiscordSyncPanel::query()->get()->keyBy('key')
+            : collect();
+        $channels = Schema::hasTable('discord_channels')
+            ? DiscordChannel::whereIn('purpose', $this->panelKeys())->get()->keyBy('purpose')
+            : collect();
+
+        return collect($this->defaultPanelDefinitions())->map(function (array $defaults, string $key) use ($settings, $channels) {
+            /** @var DiscordSyncPanel|null $setting */
+            $setting = $settings->get($key);
+            /** @var DiscordChannel|null $channel */
+            $channel = $channels->get($key);
+
+            return [
+                'key' => $key,
+                'label' => $defaults['label'],
+                'title' => $setting?->title ?: $defaults['title'],
+                'description' => $setting?->description ?: $defaults['description'],
+                'button_label' => $setting?->button_label ?: $defaults['button_label'],
+                'button_url' => $setting?->button_url ?: $defaults['button_url'],
+                'secondary_button_label' => $setting?->secondary_button_label ?: $defaults['secondary_button_label'],
+                'secondary_button_url' => $setting?->secondary_button_url ?: $defaults['secondary_button_url'],
+                'refresh_after_seconds' => max(30, min(3600, (int) ($setting?->refresh_after_seconds ?: $defaults['refresh_after_seconds']))),
+                'is_active' => $setting?->is_active ?? true,
+                'channel_name' => $channel?->name ?: $defaults['label'],
+                'channel_id' => $channel?->discord_channel_id,
+                'channel_active' => $channel?->is_active ?? true,
+                'message_id' => $channel?->static_message_id,
+                'updated_at' => $channel?->static_message_updated_at,
+            ];
+        })->values();
     }
 
     public function latestRequests(int $limit = 10): Collection
@@ -80,90 +140,222 @@ class DiscordSyncService
         return Str::substr($key, 0, 4).'...'.Str::substr($key, -4);
     }
 
-    public function recordRequest(bool $success, int $itemCount = 0, ?string $error = null, ?string $providedKey = null): void
+    public function diagnostics(): array
     {
+        return [
+            'endpoint' => url('/api/discord-sync'),
+            'all_url' => url('/api/discord-sync?channel=all'),
+            'single_channel_example' => url('/api/discord-sync?channel=awards-info'),
+            'panels' => count($this->panelKeys()),
+            'active_panels' => $this->activePanels()->where('active', true)->count(),
+            'default_refresh_after_seconds' => $this->defaultRefreshAfterSeconds(),
+        ];
+    }
+
+    public function recordRequest(
+        bool $success,
+        int $itemCount = 0,
+        ?string $error = null,
+        ?string $providedKey = null,
+        ?string $channelKey = null,
+        int $statusCode = 200,
+        ?string $ipAddress = null,
+        ?string $userAgent = null
+    ): void {
         if (!Schema::hasTable('discord_sync_requests')) {
             return;
         }
 
         DiscordSyncRequest::create([
             'api_key_hint' => $providedKey ? Str::substr($providedKey, 0, 4).'...'.Str::substr($providedKey, -4) : null,
+            'channel_key' => $channelKey,
             'success' => $success,
+            'status_code' => $statusCode,
             'item_count' => $itemCount,
             'error_message' => $error,
+            'ip_address' => $ipAddress,
+            'user_agent' => $userAgent ? Str::limit($userAgent, 255, '') : null,
             'requested_at' => now(),
         ]);
     }
 
     private function panelItems(): Collection
     {
-        $active = $this->activePanels()
-            ->filter(fn (array $panel) => $panel['active'])
-            ->pluck('key')
-            ->all();
-
-        if ($active === []) {
-            $active = $this->panelKeys();
-        }
-
-        return collect($this->panelKeys())
-            ->filter(fn (string $key) => in_array($key, $active, true))
-            ->map(fn (string $key) => $this->panelItem($key));
+        return $this->syncPanels()
+            ->filter(fn (array $panel) => $panel['is_active'] && $panel['channel_active'])
+            ->map(fn (array $panel) => $this->panelItem($panel['key']));
     }
 
-    private function panelItem(string $key): array
+    private function panelItem(string $key, ?string $knownVersion = null): array
     {
-        $payload = match ($key) {
-            'cn-pulse' => [
-                'title' => 'CN Pulse',
-                'description' => 'Laatste community updates vanuit MijnCN.',
-                'fields' => $this->pulseFields(),
-                'links' => [['label' => 'Open MijnCN', 'url' => route('dashboard')]],
-            ],
-            'staff-status' => [
-                'title' => 'Staff Status',
-                'description' => 'Beschikbaarheid en afwezigheid van het CN-team.',
-                'fields' => $this->staffFields(),
-                'links' => [['label' => 'Bekijk rooster', 'url' => route('mijncn.module', 'absences')]],
-            ],
-            'awards-info' => [
-                'title' => 'CN Awards 2026',
-                'description' => 'Fase, planning en status van de CN Awards.',
-                'fields' => $this->awardFields(),
-                'links' => [['label' => 'Open Awards', 'url' => route('awards')]],
-            ],
-            'stem-nu' => [
-                'title' => 'Stem nu',
-                'description' => 'Actieve stemronde en directe route naar stemmen.',
-                'fields' => $this->voteFields(),
-                'links' => [['label' => 'Stemmen openen', 'url' => route('awards')]],
-            ],
-            'trending' => [
-                'title' => 'Trending',
-                'description' => 'Nominaties die nu opvallen binnen CN.',
-                'fields' => $this->topNominationFields(),
-                'links' => [['label' => 'Bekijk nominaties', 'url' => route('awards')]],
-            ],
-            'leaderboard' => [
-                'title' => 'Leaderboard',
-                'description' => 'Ranglijst op basis van stemmen en reputatie.',
-                'fields' => $this->topNominationFields(),
-                'links' => [['label' => 'Bekijk leaderboard', 'url' => route('awards')]],
-            ],
-            'award-logs' => [
-                'title' => 'Award Logs',
-                'description' => 'Interne status van nominaties, reviews en jury.',
-                'fields' => $this->awardLogFields(),
-                'links' => [['label' => 'Open awardbeheer', 'url' => route('staff.awards')]],
-            ],
-        };
+        $panel = $this->syncPanels()->firstWhere('key', $key);
+        $payload = $this->buildPayload($panel);
+        $version = $this->version($key, [
+            'title' => $panel['title'],
+            'description' => $panel['description'],
+            'button_label' => $panel['button_label'],
+            'button_url' => $panel['button_url'],
+            'secondary_button_label' => $panel['secondary_button_label'],
+            'secondary_button_url' => $panel['secondary_button_url'],
+            'stats' => $this->statsForPanel($key),
+            'payload' => $payload,
+        ]);
 
         return [
             'type' => 'panel',
             'key' => $key,
-            'version' => $this->version($key, $payload),
+            'channel' => $key,
+            'label' => $panel['label'],
+            'channel_id' => $panel['channel_id'],
+            'channel_name' => $panel['channel_name'],
+            'refresh_after_seconds' => $panel['refresh_after_seconds'],
+            'version' => $version,
+            'changed' => $knownVersion === null || $knownVersion === '' ? true : !hash_equals($version, $knownVersion),
+            'stats' => $this->statsForPanel($key),
             'payload' => $payload,
         ];
+    }
+
+    private function buildPayload(array $panel): array
+    {
+        $fields = match ($panel['key']) {
+            'cn-pulse' => $this->pulseFields(),
+            'staff-status' => $this->staffFields(),
+            'awards-info' => $this->awardFields(),
+            'stem-nu' => $this->voteFields(),
+            'trending', 'leaderboard' => $this->topNominationFields(),
+            'award-logs' => $this->awardLogFields(),
+        };
+
+        $links = collect([
+            [
+                'label' => $panel['button_label'],
+                'url' => $panel['button_url'],
+            ],
+            $panel['secondary_button_label'] && $panel['secondary_button_url'] ? [
+                'label' => $panel['secondary_button_label'],
+                'url' => $panel['secondary_button_url'],
+            ] : null,
+        ])->filter(fn (?array $link) => $link && filled($link['label']) && filled($link['url']))->values()->all();
+
+        return [
+            'title' => $panel['title'],
+            'description' => $panel['description'],
+            'fields' => $fields,
+            'links' => $links,
+        ];
+    }
+
+    private function defaultPanelDefinitions(): array
+    {
+        return [
+            'cn-pulse' => [
+                'label' => 'CN Pulse',
+                'title' => 'CN Pulse',
+                'description' => 'Laatste community updates vanuit MijnCN.',
+                'button_label' => 'Open MijnCN',
+                'button_url' => route('dashboard'),
+                'secondary_button_label' => 'Bekijk Pulse',
+                'secondary_button_url' => route('mijncn.module', 'pulse'),
+                'refresh_after_seconds' => 300,
+            ],
+            'staff-status' => [
+                'label' => 'Staff Status',
+                'title' => 'Staff Status',
+                'description' => 'Beschikbaarheid en afwezigheid van het CN-team.',
+                'button_label' => 'Open rooster',
+                'button_url' => route('mijncn.module', 'absences'),
+                'secondary_button_label' => 'Staffpagina',
+                'secondary_button_url' => route('staff'),
+                'refresh_after_seconds' => 300,
+            ],
+            'awards-info' => [
+                'label' => 'Awards Info',
+                'title' => 'CN Awards 2026',
+                'description' => 'Fase, planning en status van de CN Awards.',
+                'button_label' => 'Open Awards',
+                'button_url' => route('awards'),
+                'secondary_button_label' => 'MijnCN Awards',
+                'secondary_button_url' => route('mijncn.module', 'nominations'),
+                'refresh_after_seconds' => 300,
+            ],
+            'stem-nu' => [
+                'label' => 'Stem Nu',
+                'title' => 'Stem nu',
+                'description' => 'Actieve stemronde en directe route naar stemmen.',
+                'button_label' => 'Stemmen openen',
+                'button_url' => route('awards'),
+                'secondary_button_label' => 'Leaderboard',
+                'secondary_button_url' => route('awards'),
+                'refresh_after_seconds' => 300,
+            ],
+            'trending' => [
+                'label' => 'Trending',
+                'title' => 'Trending',
+                'description' => 'Nominaties die nu opvallen binnen CN.',
+                'button_label' => 'Bekijk nominaties',
+                'button_url' => route('awards'),
+                'secondary_button_label' => 'Open MijnCN',
+                'secondary_button_url' => route('dashboard'),
+                'refresh_after_seconds' => 300,
+            ],
+            'leaderboard' => [
+                'label' => 'Leaderboard',
+                'title' => 'Leaderboard',
+                'description' => 'Ranglijst op basis van stemmen en reputatie.',
+                'button_label' => 'Bekijk leaderboard',
+                'button_url' => route('awards'),
+                'secondary_button_label' => 'Open Awards',
+                'secondary_button_url' => route('awards'),
+                'refresh_after_seconds' => 300,
+            ],
+            'award-logs' => [
+                'label' => 'Award Logs',
+                'title' => 'Award Logs',
+                'description' => 'Interne status van nominaties, reviews en jury.',
+                'button_label' => 'Open awardbeheer',
+                'button_url' => route('staff.awards'),
+                'secondary_button_label' => 'Open MijnCN',
+                'secondary_button_url' => route('dashboard'),
+                'refresh_after_seconds' => 300,
+            ],
+        ];
+    }
+
+    private function defaultRefreshAfterSeconds(): int
+    {
+        return (int) $this->syncPanels()->max('refresh_after_seconds') ?: 300;
+    }
+
+    private function statsForPanel(string $key): array
+    {
+        return match ($key) {
+            'cn-pulse' => [
+                'cards' => count($this->pulseFields()),
+                'news' => $this->newsItems()->count(),
+                'birthdays' => $this->birthdayItems()->count(),
+                'absences' => $this->absenceItems()->count(),
+            ],
+            'staff-status' => [
+                'absent_now' => Schema::hasTable('absence_requests') ? AbsenceRequest::current()->count() : 0,
+                'staff_total' => Schema::hasTable('users') ? User::whereNot('role', 'member')->count() : 0,
+            ],
+            'awards-info' => [
+                'edition' => $this->currentEdition()?->name,
+                'status' => $this->currentEdition()?->status,
+            ],
+            'stem-nu' => [
+                'votes' => Schema::hasTable('votes') ? Vote::whereNull('superseded_at')->where('is_valid', true)->count() : 0,
+            ],
+            'trending', 'leaderboard' => [
+                'tracked_nominations' => Schema::hasTable('nominations')
+                    ? Nomination::whereIn('status', ['approved', 'finalist', 'winner'])->count()
+                    : 0,
+            ],
+            'award-logs' => [
+                'pending_reviews' => Schema::hasTable('nominations') ? Nomination::where('status', 'pending')->count() : 0,
+            ],
+        };
     }
 
     private function newsItems(): Collection

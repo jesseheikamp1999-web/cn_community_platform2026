@@ -8,9 +8,13 @@ class DiscordSyncRequest extends Model
 {
     protected $fillable = [
         'api_key_hint',
+        'channel_key',
         'success',
+        'status_code',
         'item_count',
         'error_message',
+        'ip_address',
+        'user_agent',
         'requested_at',
     ];
 
@@ -18,6 +22,7 @@ class DiscordSyncRequest extends Model
     {
         return [
             'success' => 'boolean',
+            'status_code' => 'integer',
             'item_count' => 'integer',
             'requested_at' => 'datetime',
         ];

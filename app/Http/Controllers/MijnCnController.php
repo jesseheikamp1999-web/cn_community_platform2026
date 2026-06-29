@@ -7,6 +7,7 @@ use App\Models\AbsenceRequest;
 use App\Models\AwardEdition;
 use App\Models\DiscordChannel;
 use App\Models\DiscordDelivery;
+use App\Models\DiscordSyncPanel;
 use App\Models\DiscordMember;
 use App\Models\LearningPath;
 use App\Models\Lesson;
@@ -215,6 +216,7 @@ class MijnCnController extends Controller
             $data['discordSyncRequests'] = $sync->latestRequests(8);
             $data['discordSyncLastRequest'] = $sync->lastRequest();
             $data['discordSyncKeyHint'] = $sync->maskedApiKey();
+            $data['discordSyncDiagnostics'] = $sync->diagnostics();
         } elseif ($module === 'partners') {
             abort_unless($this->canManagePartners($user), 403);
             $partnerQuery = Partner::query();
@@ -575,11 +577,51 @@ class MijnCnController extends Controller
             Schema::create('discord_sync_requests', function (Blueprint $table) {
                 $table->id();
                 $table->string('api_key_hint')->nullable();
+                $table->string('channel_key')->nullable();
                 $table->boolean('success')->default(false);
+                $table->unsignedSmallInteger('status_code')->default(200);
                 $table->unsignedInteger('item_count')->default(0);
                 $table->text('error_message')->nullable();
+                $table->string('ip_address', 45)->nullable();
+                $table->string('user_agent', 255)->nullable();
                 $table->timestamp('requested_at')->index();
                 $table->timestamps();
+            });
+        }
+
+        if (!Schema::hasTable('discord_sync_panels')) {
+            Schema::create('discord_sync_panels', function (Blueprint $table) {
+                $table->id();
+                $table->string('key')->unique();
+                $table->string('title')->nullable();
+                $table->text('description')->nullable();
+                $table->string('button_label')->nullable();
+                $table->string('button_url')->nullable();
+                $table->string('secondary_button_label')->nullable();
+                $table->string('secondary_button_url')->nullable();
+                $table->unsignedSmallInteger('refresh_after_seconds')->default(300);
+                $table->boolean('is_active')->default(true);
+                $table->timestamps();
+            });
+        }
+
+        $missingSyncRequestColumns = collect(['channel_key', 'status_code', 'ip_address', 'user_agent'])
+            ->reject(fn (string $column) => Schema::hasColumn('discord_sync_requests', $column));
+
+        if ($missingSyncRequestColumns->isNotEmpty()) {
+            Schema::table('discord_sync_requests', function (Blueprint $table) use ($missingSyncRequestColumns) {
+                if ($missingSyncRequestColumns->contains('channel_key')) {
+                    $table->string('channel_key')->nullable()->after('api_key_hint');
+                }
+                if ($missingSyncRequestColumns->contains('status_code')) {
+                    $table->unsignedSmallInteger('status_code')->default(200)->after('success');
+                }
+                if ($missingSyncRequestColumns->contains('ip_address')) {
+                    $table->string('ip_address', 45)->nullable()->after('error_message');
+                }
+                if ($missingSyncRequestColumns->contains('user_agent')) {
+                    $table->string('user_agent', 255)->nullable()->after('ip_address');
+                }
             });
         }
 
@@ -594,6 +636,24 @@ class MijnCnController extends Controller
                 ]
             );
         }
+
+        $sync = app(DiscordSyncService::class);
+        foreach ($sync->syncPanels() as $panel) {
+            DiscordSyncPanel::firstOrCreate(
+                ['key' => $panel['key']],
+                [
+                    'title' => $panel['title'],
+                    'description' => $panel['description'],
+                    'button_label' => $panel['button_label'],
+                    'button_url' => $panel['button_url'],
+                    'secondary_button_label' => $panel['secondary_button_label'],
+                    'secondary_button_url' => $panel['secondary_button_url'],
+                    'refresh_after_seconds' => $panel['refresh_after_seconds'],
+                    'is_active' => true,
+                ]
+            );
+        }
+
         return back()->with('success', 'CN Pulse & Discord-kanalen zijn klaargezet. Vul per kanaal het Discord kanaal-ID in en stuur een testbericht via de bot.');
     }
 
@@ -621,6 +681,40 @@ class MijnCnController extends Controller
         );
 
         return back()->with('success', 'Discord-kanaal opgeslagen.');
+    }
+
+    public function saveDiscordSyncPanel(Request $request, string $key): RedirectResponse
+    {
+        abort_unless($this->canManageDiscord($request->user()), 403);
+        abort_unless(in_array($key, app(DiscordSyncService::class)->panelKeys(), true), 404);
+        abort_unless(Schema::hasTable('discord_sync_panels'), 404);
+
+        $data = $request->validate([
+            'title' => ['required', 'string', 'max:120'],
+            'description' => ['required', 'string', 'max:1000'],
+            'button_label' => ['required', 'string', 'max:80'],
+            'button_url' => ['required', 'url', 'max:500'],
+            'secondary_button_label' => ['nullable', 'string', 'max:80'],
+            'secondary_button_url' => ['nullable', 'url', 'max:500'],
+            'refresh_after_seconds' => ['required', 'integer', 'min:30', 'max:3600'],
+            'is_active' => ['nullable', 'boolean'],
+        ]);
+
+        DiscordSyncPanel::updateOrCreate(
+            ['key' => $key],
+            [
+                'title' => $data['title'],
+                'description' => $data['description'],
+                'button_label' => $data['button_label'],
+                'button_url' => $data['button_url'],
+                'secondary_button_label' => $data['secondary_button_label'] ?: null,
+                'secondary_button_url' => $data['secondary_button_url'] ?: null,
+                'refresh_after_seconds' => $data['refresh_after_seconds'],
+                'is_active' => $request->boolean('is_active', true),
+            ]
+        );
+
+        return back()->with('success', 'Discord Sync-paneel bijgewerkt voor '.$key.'.');
     }
 
     public function testDiscordChannel(Request $request, DiscordChannel $channel, DiscordService $discord): RedirectResponse

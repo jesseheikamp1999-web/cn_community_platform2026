@@ -490,10 +490,37 @@
                 <code>{{ url('/api/discord-sync') }}</code>
             </div>
             <div class="discord-sync-overview">
-                <article><span>API key</span><strong>{{ $discordSyncKeyHint ?? 'Niet ingesteld' }}</strong><small>Header: x-api-key</small></article>
+                <article><span>API key</span><strong>{{ $discordSyncKeyHint ?? 'Niet ingesteld' }}</strong><small>Header: x-api-key · bron {{ $discordSyncKeySource ?? 'Onbekend' }}</small></article>
                 <article><span>Laatste request</span><strong>{{ $discordSyncLastRequest?->requested_at?->diffForHumans() ?? 'Nog geen request' }}</strong><small>{{ $discordSyncLastRequest ? ($discordSyncLastRequest->success ? 'Succes' : 'Fout') : 'Wacht op bot' }}</small></article>
                 <article><span>Laatste items</span><strong>{{ $discordSyncLastRequest?->item_count ?? 0 }}</strong><small>gegenereerd voor bot</small></article>
             </div>
+            @if($user->role->value === 'owner')
+                <div class="discord-sync-columns">
+                    <div>
+                        <h3>Owner keybeheer</h3>
+                        <form method="post" action="{{ route('mijncn.discord.api-key.update') }}" class="discord-sync-key-form">
+                            @csrf
+                            @method('put')
+                            <label>Nieuwe API key<input name="api_key" type="password" minlength="16" maxlength="255" placeholder="Alleen invullen om te wijzigen"></label>
+                            <div class="discord-sync-key-actions">
+                                <button class="button button-secondary button-small">API key opslaan</button>
+                            </div>
+                        </form>
+                    </div>
+                    <div>
+                        <h3>Reset naar .env</h3>
+                        <form method="post" action="{{ route('mijncn.discord.api-key.update') }}" class="discord-sync-key-form">
+                            @csrf
+                            @method('put')
+                            <input type="hidden" name="reset_api_key" value="1">
+                            <p class="discord-sync-key-help">Gebruik dit als je de sleutel weer uit de server `.env` wilt halen in plaats van uit MijnCN.</p>
+                            <div class="discord-sync-key-actions">
+                                <button class="button button-primary button-small">Reset naar .env</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            @endif
             <div class="discord-sync-columns">
                 <div>
                     <h3>Actieve panelen</h3>

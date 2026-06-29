@@ -7,6 +7,7 @@ use App\Models\AwardEdition;
 use App\Models\Content;
 use App\Models\DiscordChannel;
 use App\Models\DiscordSyncPanel;
+use App\Models\DiscordSyncSetting;
 use App\Models\DiscordSyncRequest;
 use App\Models\Nomination;
 use App\Models\User;
@@ -132,12 +133,36 @@ class DiscordSyncService
 
     public function maskedApiKey(): string
     {
-        $key = (string) config('services.discord_sync.api_key');
+        $key = $this->configuredApiKey();
         if ($key === '') {
             return 'Niet ingesteld';
         }
 
         return Str::substr($key, 0, 4).'...'.Str::substr($key, -4);
+    }
+
+    public function configuredApiKey(): string
+    {
+        if (Schema::hasTable('discord_sync_settings')) {
+            $customKey = trim((string) DiscordSyncSetting::query()->where('key', 'api_key')->value('value'));
+            if ($customKey !== '') {
+                return $customKey;
+            }
+        }
+
+        return trim((string) config('services.discord_sync.api_key'));
+    }
+
+    public function apiKeySource(): string
+    {
+        if (Schema::hasTable('discord_sync_settings')) {
+            $customKey = trim((string) DiscordSyncSetting::query()->where('key', 'api_key')->value('value'));
+            if ($customKey !== '') {
+                return 'MijnCN';
+            }
+        }
+
+        return config('services.discord_sync.api_key') ? '.env' : 'Niet ingesteld';
     }
 
     public function diagnostics(): array

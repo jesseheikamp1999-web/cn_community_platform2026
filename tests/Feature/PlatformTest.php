@@ -1189,6 +1189,44 @@ class PlatformTest extends TestCase
         $this->assertSame(600, data_get($response, 'item.refresh_after_seconds'));
     }
 
+    public function test_owner_can_store_discord_sync_api_key_in_mijncn(): void
+    {
+        config(['services.discord_sync.api_key' => 'fallback-sync-key']);
+        $owner = User::factory()->create(['role' => \App\Enums\UserRole::Owner]);
+
+        $this->actingAs($owner)->post(route('mijncn.discord.upgrade'))->assertRedirect();
+
+        $this->actingAs($owner)
+            ->put(route('mijncn.discord.api-key.update'), [
+                'api_key' => 'my-custom-super-secret-sync-key',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertDatabaseHas('discord_sync_settings', [
+            'key' => 'api_key',
+            'value' => 'my-custom-super-secret-sync-key',
+        ]);
+
+        $this->withHeader('x-api-key', 'my-custom-super-secret-sync-key')
+            ->getJson('/api/discord-sync?channel=cn-pulse')
+            ->assertOk()
+            ->assertJson(['success' => true]);
+    }
+
+    public function test_management_cannot_manage_discord_sync_api_key(): void
+    {
+        $management = User::factory()->create(['role' => \App\Enums\UserRole::Management]);
+
+        $this->actingAs($management)->post(route('mijncn.discord.upgrade'))->assertRedirect();
+
+        $this->actingAs($management)
+            ->put(route('mijncn.discord.api-key.update'), [
+                'api_key' => 'management-cannot-save-this-key',
+            ])
+            ->assertForbidden();
+    }
+
     public function test_community_directory_only_lists_discord_connected_mijncn_users(): void
     {
         $viewer = User::factory()->create(['discord_id' => 'viewer-discord']);

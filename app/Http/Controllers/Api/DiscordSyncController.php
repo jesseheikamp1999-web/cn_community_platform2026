@@ -13,7 +13,7 @@ class DiscordSyncController extends Controller
     public function __invoke(Request $request, DiscordSyncService $sync): JsonResponse
     {
         $providedKey = (string) $request->header('x-api-key', '');
-        $expectedKey = (string) config('services.discord_sync.api_key', '');
+        $expectedKey = $sync->configuredApiKey();
         $channel = strtolower(trim((string) $request->query('channel', 'all')));
         $knownVersion = trim((string) $request->query('known_version', ''));
         $ipAddress = $request->ip();

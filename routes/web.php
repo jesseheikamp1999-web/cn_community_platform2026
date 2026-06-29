@@ -93,6 +93,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/mijn-cn/discord/database-bijwerken', [MijnCnController::class, 'upgradeDiscordIntegration'])->name('mijncn.discord.upgrade');
     Route::post('/mijn-cn/discord/kanaal', [MijnCnController::class, 'saveDiscordChannel'])->name('mijncn.discord.channel.save');
     Route::put('/mijn-cn/discord/sync/{key}', [MijnCnController::class, 'saveDiscordSyncPanel'])->name('mijncn.discord.sync.update');
+    Route::put('/mijn-cn/discord/api-key', [MijnCnController::class, 'saveDiscordSyncApiKey'])->name('mijncn.discord.api-key.update');
     Route::post('/mijn-cn/discord/kanaal/{channel}/testen', [MijnCnController::class, 'testDiscordChannel'])->name('mijncn.discord.channel.test');
     Route::post('/mijn-cn/discord/kanaal/{channel}/paneel', [MijnCnController::class, 'publishDiscordPanel'])->name('mijncn.discord.channel.panel');
     Route::post('/mijn-cn/discord/panelen', [MijnCnController::class, 'publishDiscordPanels'])->name('mijncn.discord.panels');

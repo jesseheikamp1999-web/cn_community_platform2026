@@ -8,6 +8,7 @@ use App\Models\AwardEdition;
 use App\Models\DiscordChannel;
 use App\Models\DiscordDelivery;
 use App\Models\DiscordSyncPanel;
+use App\Models\DiscordSyncSetting;
 use App\Models\DiscordMember;
 use App\Models\LearningPath;
 use App\Models\Lesson;
@@ -216,6 +217,7 @@ class MijnCnController extends Controller
             $data['discordSyncRequests'] = $sync->latestRequests(8);
             $data['discordSyncLastRequest'] = $sync->lastRequest();
             $data['discordSyncKeyHint'] = $sync->maskedApiKey();
+            $data['discordSyncKeySource'] = $sync->apiKeySource();
             $data['discordSyncDiagnostics'] = $sync->diagnostics();
         } elseif ($module === 'partners') {
             abort_unless($this->canManagePartners($user), 403);
@@ -605,6 +607,15 @@ class MijnCnController extends Controller
             });
         }
 
+        if (!Schema::hasTable('discord_sync_settings')) {
+            Schema::create('discord_sync_settings', function (Blueprint $table) {
+                $table->id();
+                $table->string('key')->unique();
+                $table->text('value')->nullable();
+                $table->timestamps();
+            });
+        }
+
         $missingSyncRequestColumns = collect(['channel_key', 'status_code', 'ip_address', 'user_agent'])
             ->reject(fn (string $column) => Schema::hasColumn('discord_sync_requests', $column));
 
@@ -717,6 +728,30 @@ class MijnCnController extends Controller
         return back()->with('success', 'Discord Sync-paneel bijgewerkt voor '.$key.'.');
     }
 
+    public function saveDiscordSyncApiKey(Request $request): RedirectResponse
+    {
+        $this->ownerOnly($request);
+        abort_unless(Schema::hasTable('discord_sync_settings'), 404);
+
+        $data = $request->validate([
+            'api_key' => ['nullable', 'string', 'min:16', 'max:255'],
+            'reset_api_key' => ['nullable', 'boolean'],
+        ]);
+
+        if ($request->boolean('reset_api_key')) {
+            DiscordSyncSetting::query()->where('key', 'api_key')->delete();
+
+            return back()->with('success', 'Discord Sync API key teruggezet naar de .env-waarde.');
+        }
+
+        DiscordSyncSetting::query()->updateOrCreate(
+            ['key' => 'api_key'],
+            ['value' => trim((string) ($data['api_key'] ?? ''))]
+        );
+
+        return back()->with('success', 'Discord Sync API key opgeslagen in MijnCN.');
+    }
+
     public function testDiscordChannel(Request $request, DiscordChannel $channel, DiscordService $discord): RedirectResponse
     {
         abort_unless($this->canManageDiscord($request->user()), 403);
@@ -814,6 +849,11 @@ class MijnCnController extends Controller
     {
         return in_array($user->role->value, ['owner', 'management', 'admin'], true)
             || $user->hasPermission('content.manage');
+    }
+
+    private function ownerOnly(Request $request): void
+    {
+        abort_unless($request->user()->role->value === 'owner', 403);
     }
 
     private function discordPurposeDefinitions(): array

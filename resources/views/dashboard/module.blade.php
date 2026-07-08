@@ -3,17 +3,17 @@
 @php
     $titles = [
         'profile' => ['Mijn profiel', 'Je Discord-profiel en persoonlijke gegevens op één plek.'],
-        'notifications' => ['Meldingen', 'Updates over Awards, Academy, taken en jouw account.'],
+        'notifications' => ['Meldingen', 'Updates over Awards, community, taken en jouw account.'],
         'inbox' => ['Inbox', 'Persoonlijke en interne berichten binnen CN Community.'],
         'nominations' => ['Mijn nominaties', 'Bekijk de personen en communities die jij hebt genomineerd.'],
         'votes' => ['Mijn stemmen', 'Een overzicht van jouw uitgebrachte Awards-stemmen.'],
         'results' => ['Mijn resultaten', 'Finaleplaatsen en gepubliceerde Awards-resultaten.'],
         'lessons' => ['Mijn lessen', 'Werk stap voor stap aan jouw ontwikkeling binnen CN.'],
-        'exams' => ['Examens', 'Quizzen, examens en praktijkscenario’s uit de Academy.'],
-        'certificates' => ['Certificaten', 'Jouw officieel behaalde CN Academy-certificaten.'],
+        'exams' => ['Examens', 'Historische toetsresultaten binnen MijnCN.'],
+        'certificates' => ['Certificaten', 'Historisch behaalde certificaten binnen MijnCN.'],
         'badges' => ['Badges', 'Erkenning voor bijdragen, groei en behaalde mijlpalen.'],
         'tasks' => ['Takenbord', 'Open, toegewezen en afgeronde werkzaamheden.'],
-        'nomi' => ['Nomi AI', 'Stel vragen over de community, Academy of staffprocessen.'],
+        'nomi' => ['Nomi AI', 'Stel vragen over de community, awards of staffprocessen.'],
         'settings' => ['Instellingen', 'Beheer privacy, verjaardag en persoonlijke voorkeuren.'],
         'absences' => ['Afwezigheid', 'Geef aan wanneer je tijdelijk niet beschikbaar bent voor CN.'],
         'birthdays' => ['Verjaardagen', 'Bekijk aankomende verjaardagen volgens de privacyvoorkeuren van leden.'],
@@ -199,7 +199,7 @@
                     @php($lessonProgress = $progress->get($lesson->id))
                     <article><div class="academy-card-icon">@include('components.icon', ['name' => $module === 'exams' ? 'exam' : 'book'])</div><span>{{ $lesson->path->name }}</span><h3>{{ $lesson->title }}</h3><p>{{ ucfirst($lesson->type) }} · {{ $lesson->xp_reward }} XP</p><div class="academy-card-footer"><span class="status status-{{ $lessonProgress->status ?? 'pending' }}">{{ $lessonProgress ? ucfirst($lessonProgress->status) : 'Nog starten' }}</span></div></article>
                 @empty
-                    <div class="module-empty wide"><h3>Nog niets gepubliceerd</h3><p>De Academy-inhoud verschijnt hier zodra een leerpad is vrijgegeven.</p></div>
+                    <div class="module-empty wide"><h3>Nog niets gepubliceerd</h3><p>Nieuwe inhoud verschijnt hier zodra deze binnen MijnCN beschikbaar is.</p></div>
                 @endforelse
             </div>
             {{ $lessons->links() }}
@@ -492,7 +492,7 @@
             <div class="discord-sync-overview">
                 <article><span>API key</span><strong>{{ $discordSyncKeyHint ?? 'Niet ingesteld' }}</strong><small>Header: x-api-key · bron {{ $discordSyncKeySource ?? 'Onbekend' }}</small></article>
                 <article><span>Laatste request</span><strong>{{ $discordSyncLastRequest?->requested_at?->diffForHumans() ?? 'Nog geen request' }}</strong><small>{{ $discordSyncLastRequest ? ($discordSyncLastRequest->success ? 'Succes' : 'Fout') : 'Wacht op bot' }}</small></article>
-                <article><span>Laatste items</span><strong>{{ $discordSyncLastRequest?->item_count ?? 0 }}</strong><small>gegenereerd voor bot</small></article>
+                <article><span>Klaar voor sync</span><strong>{{ $discordSyncDiagnostics['ready_items_count'] ?? 0 }}</strong><small>items in de huidige payload</small></article>
             </div>
             @if($user->role->value === 'owner')
                 <div class="discord-sync-columns">
@@ -526,7 +526,7 @@
                     <h3>Actieve panelen</h3>
                     <div class="module-list compact-list">
                         @forelse($discordSyncPanels ?? [] as $panel)
-                            <article><div><strong>{{ $panel['title'] ?? $panel['key'] }}</strong><p><code>{{ $panel['key'] }}</code> · {{ $panel['active'] ? 'Actief' : 'Uitgeschakeld' }} · refresh {{ $panel['refresh_after_seconds'] ?? 300 }}s @if($panel['channel_id']) · kanaal {{ $panel['channel_id'] }} @endif @if($panel['message_id']) · message {{ $panel['message_id'] }} @endif</p></div><span class="status status-{{ $panel['active'] ? 'approved' : 'controle' }}">{{ $panel['active'] ? 'actief' : 'uit' }}</span></article>
+                            <article><div><strong>{{ $panel['title'] ?? $panel['key'] }}</strong><p><code>{{ $panel['key'] }}</code> · versie <code>{{ $panel['current_version'] ?? 'n.v.t.' }}</code> · refresh {{ $panel['refresh_after_seconds'] ?? 300 }}s @if($panel['channel_id']) · kanaal {{ $panel['channel_id'] }} @endif @if($panel['message_id']) · message {{ $panel['message_id'] }} @endif</p></div><span class="status status-{{ $panel['active'] ? 'approved' : 'controle' }}">{{ $panel['active'] ? 'actief' : 'uit' }}</span></article>
                         @empty
                             <div class="module-empty"><h3>Nog geen panelen</h3><p>Klik op Database bijwerken.</p></div>
                         @endforelse
@@ -536,7 +536,7 @@
                     <h3>Laatste sync-items</h3>
                     <div class="module-list compact-list">
                         @forelse($discordSyncItems ?? [] as $item)
-                            <article><div><strong>{{ $item['type'] }} @if(isset($item['key'])) &middot; {{ $item['key'] }} @elseif(isset($item['id'])) &middot; {{ $item['id'] }} @endif</strong><p>{{ data_get($item, 'payload.title', $item['title'] ?? 'Geen titel') }}</p></div><span class="status status-approved">{{ $item['type'] }}</span></article>
+                            <article><div><strong>{{ $item['type'] }} @if(isset($item['key'])) &middot; {{ $item['key'] }} @elseif(isset($item['id'])) &middot; {{ $item['id'] }} @endif</strong><p>{{ data_get($item, 'payload.title') ?? data_get($item, 'payload.name') ?? 'Geen titel' }}</p></div><span class="status status-approved">{{ $item['channel'] ?? $item['type'] }}</span></article>
                         @empty
                             <div class="module-empty"><h3>Geen items</h3><p>Er staat niets klaar voor de bot.</p></div>
                         @endforelse
@@ -549,7 +549,7 @@
                     <div class="module-list compact-list">
                         <article><div><strong>Volledige sync</strong><p><code>{{ $discordSyncDiagnostics['all_url'] ?? url('/api/discord-sync?channel=all') }}</code></p></div><span class="status status-approved">all</span></article>
                         <article><div><strong>Enkel paneel</strong><p><code>{{ $discordSyncDiagnostics['single_channel_example'] ?? url('/api/discord-sync?channel=awards-info') }}</code></p></div><span class="status status-approved">single</span></article>
-                        <article><div><strong>Refresh</strong><p>Standaard {{ $discordSyncDiagnostics['default_refresh_after_seconds'] ?? 300 }} seconden · {{ $discordSyncDiagnostics['active_panels'] ?? 0 }} actieve panelen</p></div><span class="status status-approved">meta</span></article>
+                        <article><div><strong>Refresh</strong><p>Standaard {{ $discordSyncDiagnostics['default_refresh_after_seconds'] ?? 300 }} seconden · {{ $discordSyncDiagnostics['active_panels'] ?? 0 }} actieve panelen · API {{ $discordSyncDiagnostics['api_status'] ?? 'onbekend' }}</p></div><span class="status status-approved">meta</span></article>
                     </div>
                 </div>
                 <div>
@@ -557,7 +557,27 @@
                     <div class="module-list compact-list">
                         <article><div><strong>x-api-key</strong><p>Gebruik dezelfde sleutel als in de botconfig en server `.env`.</p></div><span class="status status-approved">required</span></article>
                         <article><div><strong>known_version</strong><p>Bij `channel=awards-info` kun je de laatst bekende versie meesturen voor snelle `changed` checks.</p></div><span class="status status-approved">optional</span></article>
-                        <article><div><strong>Response</strong><p>JSON only, met `generated_at`, `refresh_after_seconds`, `version` en `payload`.</p></div><span class="status status-approved">json</span></article>
+                        <article><div><strong>Response</strong><p>JSON only, met `generated_at`, `refresh_after_seconds`, `changed`, `version` en compacte `payload` data.</p></div><span class="status status-approved">json</span></article>
+                    </div>
+                </div>
+            </div>
+            <div class="discord-sync-columns">
+                <div>
+                    <h3>Laatste losse IDs</h3>
+                    <div class="module-list compact-list">
+                        <article><div><strong>Nieuws</strong><p>{{ implode(', ', $discordSyncLatestIds['news'] ?? []) ?: 'Nog geen nieuws-items klaar.' }}</p></div><span class="status status-approved">news</span></article>
+                        <article><div><strong>Verjaardagen</strong><p>{{ implode(', ', $discordSyncLatestIds['birthdays'] ?? []) ?: 'Vandaag geen verjaardagsitems.' }}</p></div><span class="status status-approved">birthdays</span></article>
+                        <article><div><strong>Staff-afwezigheid</strong><p>{{ implode(', ', $discordSyncLatestIds['staff_absences'] ?? []) ?: 'Geen actuele staff-afwezigheden klaar.' }}</p></div><span class="status status-approved">absence</span></article>
+                    </div>
+                </div>
+                <div>
+                    <h3>Payload preview</h3>
+                    <div class="module-list compact-list">
+                        @forelse(($discordSyncPanelPreviews ?? collect())->take(4) as $preview)
+                            <article><div><strong>{{ data_get($preview, 'payload.title') }}</strong><p>{{ data_get($preview, 'payload.description') }}</p></div><span class="status status-approved">{{ data_get($preview, 'key') }}</span></article>
+                        @empty
+                            <div class="module-empty"><h3>Nog geen preview</h3><p>Zodra de sync actief is zie je hier voorbeeldpayloads per kanaal.</p></div>
+                        @endforelse
                     </div>
                 </div>
             </div>
@@ -755,10 +775,10 @@
 
     @elseif($module === 'nomi')
         <div class="nomi-layout">
-            <section class="module-card nomi-intro"><div class="nomi-robot">@include('components.icon', ['name' => 'spark'])</div><span>NOMI AI ASSISTENT</span><h2>Waar kan ik je mee helpen?</h2><p>Nomi gebruikt de ingestelde CN-kennisbron voor vragen over de community, Academy en interne processen.</p></section>
+            <section class="module-card nomi-intro"><div class="nomi-robot">@include('components.icon', ['name' => 'spark'])</div><span>NOMI AI ASSISTENT</span><h2>Waar kan ik je mee helpen?</h2><p>Nomi gebruikt de ingestelde CN-kennisbron voor vragen over de community, awards en interne processen.</p></section>
             <section class="module-card">
                 <form class="module-form" method="post" action="{{ route('mijncn.nomi.ask') }}">@csrf
-                    <label>Onderwerp<select name="context"><option value="community">Community</option><option value="academy">Academy</option>@if($user->hasPermission('staff.access'))<option value="staff">Staff</option>@endif</select></label>
+                    <label>Onderwerp<select name="context"><option value="community">Community</option><option value="staff">Staff</option></select></label>
                     <label>Jouw vraag<textarea name="question" rows="6" required placeholder="Bijvoorbeeld: hoe werkt nomineren bij de CN Awards?">{{ old('question') }}</textarea></label>
                     <button class="button button-primary">Vraag aan Nomi</button>
                 </form>

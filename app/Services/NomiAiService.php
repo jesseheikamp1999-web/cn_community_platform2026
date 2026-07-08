@@ -46,10 +46,6 @@ class NomiAiService
             return 'Stemmen kan tijdens een geopende stemronde via CN Awards. Per categorie controleert het platform je Discord-account, IP-signaal en bestaande stem om dubbele stemmen te voorkomen.';
         }
 
-        if ($context === 'academy' || str_contains($question, 'les') || str_contains($question, 'examen')) {
-            return 'Ga in MijnCN naar Mijn Lessen of Examens. Daar zie je gepubliceerde onderdelen, je voortgang, XP en behaalde certificaten.';
-        }
-
         if ($context === 'staff' || str_contains($question, 'afwezig')) {
             return 'Staffleden kunnen via MijnCN bij Afwezigheid een periode registreren. Tijdens die datums staat op de publieke staffpagina automatisch Niet beschikbaar.';
         }
@@ -58,6 +54,6 @@ class NomiAiService
             return "Ik vond hierover informatie binnen CN Community:\n\n".$knowledge;
         }
 
-        return 'Ik kan je helpen met CN Awards, MijnCN, de Academy, taken en staffprocessen. Stel je vraag zo concreet mogelijk, dan wijs ik je naar de juiste plek.';
+        return 'Ik kan je helpen met Connect Next Awards, MijnCN, taken, community-updates en staffprocessen. Stel je vraag zo concreet mogelijk, dan wijs ik je naar de juiste plek.';
     }
 }

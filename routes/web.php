@@ -3,7 +3,6 @@
 use App\Http\Controllers\Auth\DiscordController;
 use App\Http\Controllers\AwardActionController;
 use App\Http\Controllers\AwardsController;
-use App\Http\Controllers\AcademyController;
 use App\Http\Controllers\CommunityFormController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\HomeController;
@@ -18,31 +17,100 @@ use App\Http\Controllers\Staff\HrController;
 use App\Http\Controllers\Staff\AccessController;
 use App\Http\Controllers\Staff\ContentController;
 use App\Http\Controllers\StaffChatController;
+use App\Http\Middleware\SetPublicLocale;
+use App\Models\Content;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/install', [InstallController::class, 'index'])->name('install');
 Route::post('/install', [InstallController::class, 'store'])->name('install.store');
 
-Route::get('/', HomeController::class)->name('home');
-Route::get('/zoeken', [PageController::class, 'search'])->name('search');
+Route::get('/sitemap.xml', function () {
+    $pages = [
+        ['route' => 'home'],
+        ['route' => 'ai'],
+        ['route' => 'development'],
+        ['route' => 'communities'],
+        ['route' => 'awards'],
+        ['route' => 'mini.awards'],
+        ['route' => 'projects'],
+        ['route' => 'about'],
+        ['route' => 'contact'],
+        ['route' => 'nieuws'],
+        ['route' => 'partners'],
+        ['route' => 'staff'],
+    ];
+
+    $items = collect(['nl', 'en'])->flatMap(function (string $locale) use ($pages) {
+        return collect($pages)->map(fn (array $page) => [
+            'loc' => route($page['route'], ['locale' => $locale]),
+            'lastmod' => now()->toDateString(),
+        ]);
+    })->merge(
+        Content::published()
+            ->where('type', 'news')
+            ->latest('published_at')
+            ->limit(200)
+            ->get()
+            ->map(fn (Content $content) => [
+                'loc' => route('news.show', ['locale' => 'nl', 'content' => $content]),
+                'lastmod' => optional($content->updated_at)->toDateString() ?? now()->toDateString(),
+            ])
+    );
+
+    $xml = view('sitemap', ['items' => $items]);
+
+    return response($xml, 200)->header('Content-Type', 'application/xml');
+});
+
 Route::get('/login', [DiscordController::class, 'redirect'])->name('login');
 Route::get('/auth/discord', [DiscordController::class, 'redirect'])->name('discord.login');
 Route::get('/auth/discord/callback', [DiscordController::class, 'callback'])->name('discord.callback');
 Route::post('/uitloggen', [DiscordController::class, 'logout'])->name('logout');
 
-Route::get('/awards', [AwardsController::class, 'index'])->name('awards');
-Route::get('/awards/finale', [AwardsController::class, 'finale'])->name('awards.finale');
-Route::get('/awards/hall-of-fame', [AwardsController::class, 'hallOfFame'])->name('awards.hall');
-Route::get('/awards/nominatie/{nomination}', [AwardsController::class, 'nomination'])->name('awards.nomination');
-Route::get('/mini-awards', [MiniAwardsController::class, 'index'])->name('mini.awards');
-Route::get('/mini-awards/archief', [MiniAwardsController::class, 'archive'])->name('mini.awards.archive');
-Route::get('/nieuws', [NewsController::class, 'index'])->name('nieuws');
-Route::get('/nieuws/{content:slug}', [NewsController::class, 'show'])->name('news.show');
-Route::get('/partners', [PageController::class, 'show'])->defaults('page', 'partners')->name('partners');
-Route::get('/staff', [PageController::class, 'show'])->defaults('page', 'staff')->name('staff');
-Route::get('/contact', [PageController::class, 'show'])->defaults('page', 'contact')->name('contact');
-Route::get('/solliciteren', [PageController::class, 'show'])->defaults('page', 'solliciteren')->name('solliciteren');
-Route::get('/partner-worden', [PageController::class, 'show'])->defaults('page', 'partner-worden')->name('partner.worden');
+Route::get('/', function () {
+    $locale = SetPublicLocale::preferredLocale(request());
+
+    return redirect()->route('home', ['locale' => $locale]);
+});
+
+Route::prefix('{locale}')
+    ->whereIn('locale', ['nl', 'en'])
+    ->middleware('public.locale')
+    ->group(function () {
+        Route::get('/', HomeController::class)->name('home');
+        Route::get('/search', [PageController::class, 'search'])->name('search');
+
+        Route::get('/ai', [PageController::class, 'show'])->defaults('page', 'ai')->name('ai');
+        Route::get('/development', [PageController::class, 'show'])->defaults('page', 'development')->name('development');
+        Route::get('/communities', [PageController::class, 'show'])->defaults('page', 'communities')->name('communities');
+        Route::get('/projects', [PageController::class, 'show'])->defaults('page', 'projects')->name('projects');
+        Route::get('/about', [PageController::class, 'show'])->defaults('page', 'about')->name('about');
+        Route::get('/contact', [PageController::class, 'show'])->defaults('page', 'contact')->name('contact');
+
+        Route::get('/awards', [AwardsController::class, 'index'])->name('awards');
+        Route::get('/awards/finale', [AwardsController::class, 'finale'])->name('awards.finale');
+        Route::get('/awards/hall-of-fame', [AwardsController::class, 'hallOfFame'])->name('awards.hall');
+        Route::get('/awards/nominatie/{nomination}', [AwardsController::class, 'nomination'])->name('awards.nomination');
+        Route::get('/mini-awards', [MiniAwardsController::class, 'index'])->name('mini.awards');
+        Route::get('/mini-awards/archief', [MiniAwardsController::class, 'archive'])->name('mini.awards.archive');
+        Route::get('/news', [NewsController::class, 'index'])->name('nieuws');
+        Route::get('/news/{content:slug}', [NewsController::class, 'show'])->name('news.show');
+        Route::get('/partners', [PageController::class, 'show'])->defaults('page', 'partners')->name('partners');
+        Route::get('/staff', [PageController::class, 'show'])->defaults('page', 'staff')->name('staff');
+        Route::get('/apply', [PageController::class, 'show'])->defaults('page', 'apply')->name('solliciteren');
+        Route::get('/become-a-partner', [PageController::class, 'show'])->defaults('page', 'partner')->name('partner.worden');
+    });
+
+Route::permanentRedirect('/zoeken', '/nl/search');
+Route::permanentRedirect('/nieuws', '/nl/news');
+Route::permanentRedirect('/partners', '/nl/partners');
+Route::permanentRedirect('/staff', '/nl/staff');
+Route::permanentRedirect('/contact', '/nl/contact');
+Route::permanentRedirect('/solliciteren', '/nl/apply');
+Route::permanentRedirect('/partner-worden', '/nl/become-a-partner');
+Route::permanentRedirect('/awards', '/nl/awards');
+Route::permanentRedirect('/mini-awards', '/nl/mini-awards');
+
 Route::post('/formulier/{type}', [CommunityFormController::class, 'store'])
     ->whereIn('type', ['contact', 'application', 'partnership'])
     ->middleware('throttle:5,10')
@@ -50,13 +118,6 @@ Route::post('/formulier/{type}', [CommunityFormController::class, 'store'])
 
 Route::middleware('auth')->group(function () {
     Route::get('/mijn-cn', DashboardController::class)->name('dashboard');
-    Route::get('/mijn-cn/academy', [AcademyController::class, 'index'])->name('academy.index');
-    Route::get('/mijn-cn/academy/opleiding/{path}', [AcademyController::class, 'path'])->name('academy.path');
-    Route::get('/mijn-cn/academy/les/{lesson}', [AcademyController::class, 'lesson'])->name('academy.lesson');
-    Route::post('/mijn-cn/academy/les/{lesson}/afronden', [AcademyController::class, 'completeLesson'])->name('academy.lesson.complete');
-    Route::post('/mijn-cn/academy/opdracht/{lesson}', [AcademyController::class, 'submitAssignment'])->name('academy.assignment.submit');
-    Route::post('/mijn-cn/academy/toets/{lesson}', [AcademyController::class, 'submitAssessment'])->name('academy.assessment.submit');
-    Route::get('/mijn-cn/academy/resultaat/{attempt}', [AcademyController::class, 'result'])->name('academy.attempt.result');
     Route::get('/mijn-cn/chat', [StaffChatController::class, 'index'])->name('mijncn.chat');
     Route::post('/mijn-cn/chat/installeren', [StaffChatController::class, 'install'])->name('mijncn.chat.install');
     Route::post('/mijn-cn/chat/start', [StaffChatController::class, 'start'])->name('mijncn.chat.start');
@@ -101,7 +162,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/mijn-cn/afwezigheid', [MijnCnController::class, 'reportAbsence'])->name('mijncn.absences.store');
     Route::delete('/mijn-cn/afwezigheid/{absence}', [MijnCnController::class, 'cancelAbsence'])->name('mijncn.absences.cancel');
     Route::get('/mijn-cn/{module}', [MijnCnController::class, 'show'])
-        ->whereIn('module', ['profile', 'notifications', 'inbox', 'nominations', 'votes', 'results', 'lessons', 'exams', 'certificates', 'badges', 'tasks', 'nomi', 'settings', 'absences', 'birthdays', 'community', 'pulse', 'discord', 'partners'])
+        ->whereIn('module', ['profile', 'notifications', 'inbox', 'nominations', 'votes', 'results', 'tasks', 'nomi', 'settings', 'absences', 'birthdays', 'community', 'pulse', 'discord', 'partners'])
         ->name('mijncn.module');
     Route::post('/awards/categorie/{category}/nomineren', [AwardActionController::class, 'nominate'])->name('awards.nominate');
     Route::post('/awards/nominatie/{nomination}/stem', [AwardActionController::class, 'vote'])->name('awards.vote');
@@ -121,9 +182,6 @@ Route::prefix('staff')->name('staff.')->middleware(['auth', 'permission:staff.ac
     Route::post('/awards/{edition}/publiceren', [AwardManagementController::class, 'publishWinners'])->name('awards.winners.publish');
     Route::post('/awards/{edition}/reveal/{position}', [AwardManagementController::class, 'revealPosition'])->name('awards.reveal.position');
     Route::patch('/awards/nominaties/{nomination}/controle', [AwardManagementController::class, 'review'])->name('awards.review');
-    Route::get('/academy', [AcademyController::class, 'manage'])->name('academy');
-    Route::post('/academy/deelnemers', [AcademyController::class, 'enroll'])->name('academy.enroll');
-    Route::post('/academy/opdrachten/{lesson}/{student}', [AcademyController::class, 'review'])->name('academy.review');
     Route::get('/hr', [HrController::class, 'index'])->name('hr');
     Route::patch('/hr/sollicitaties/{application}', [HrController::class, 'updateApplication'])->name('hr.applications.update');
     Route::post('/discord/leden-synchroniseren', [HrController::class, 'syncDiscordMembers'])->name('discord.members.sync');

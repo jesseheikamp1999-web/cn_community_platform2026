@@ -214,11 +214,13 @@ class MijnCnController extends Controller
             $data['statusCards'] = $pulse->statusCards();
             $data['discordSyncItems'] = collect($sync->items())->take(12);
             $data['discordSyncPanels'] = $sync->activePanels();
+            $data['discordSyncPanelPreviews'] = $sync->previewPanels();
             $data['discordSyncRequests'] = $sync->latestRequests(8);
             $data['discordSyncLastRequest'] = $sync->lastRequest();
             $data['discordSyncKeyHint'] = $sync->maskedApiKey();
             $data['discordSyncKeySource'] = $sync->apiKeySource();
             $data['discordSyncDiagnostics'] = $sync->diagnostics();
+            $data['discordSyncLatestIds'] = $sync->latestLooseIds();
         } elseif ($module === 'partners') {
             abort_unless($this->canManagePartners($user), 403);
             $partnerQuery = Partner::query();
@@ -831,12 +833,12 @@ class MijnCnController extends Controller
 
         $result = $automation->run();
 
-        return back()->with('success', 'Automatisering uitgevoerd: awards '.$result['award_phases'].', verjaardagen '.$result['birthdays'].', nieuws '.$result['news'].', staff-status '.$result['staff_status'].'.');
+        return back()->with('success', 'Automatisering uitgevoerd: awards '.$result['award_phases'].', verjaardagen '.$result['birthdays'].', nieuws '.$result['news'].', staff-status '.$result['staff_status'].', CN Pulse reminders '.($result['cn_pulse_reminders'] ?? 0).'.');
     }
 
     private function modules(): array
     {
-        return ['profile', 'notifications', 'inbox', 'nominations', 'votes', 'results', 'lessons', 'exams', 'certificates', 'badges', 'tasks', 'nomi', 'settings', 'absences', 'birthdays', 'community', 'pulse', 'discord', 'partners'];
+        return ['profile', 'notifications', 'inbox', 'nominations', 'votes', 'results', 'tasks', 'nomi', 'settings', 'absences', 'birthdays', 'community', 'pulse', 'discord', 'partners'];
     }
 
     private function canManagePartners(User $user): bool
@@ -859,7 +861,7 @@ class MijnCnController extends Controller
     private function discordPurposeDefinitions(): array
     {
         return [
-            'cn-pulse' => ['name' => '📡┃cn-pulse', 'description' => 'Live feed uit MijnCN met nominaties, partners, Academy en community-updates.'],
+            'cn-pulse' => ['name' => '📡┃cn-pulse', 'description' => 'Live feed uit MijnCN met nominaties, partners en community-updates.'],
             'nieuws' => ['name' => '📰┃nieuws', 'description' => 'CN nieuws, NU.nl/NOS feed en handmatige nieuwsberichten.'],
             'verjaardagen' => ['name' => '🎂┃verjaardagen', 'description' => 'Automatische verjaardagsmeldingen.'],
             'staff-status' => ['name' => '👥┃staff-status', 'description' => 'Afwezigheid, beschikbaarheid en teamrooster-updates.'],
@@ -875,7 +877,7 @@ class MijnCnController extends Controller
     private function discordPurposes(): array
     {
         return [
-            'cn-pulse' => ['name' => '📡┃cn-pulse', 'description' => 'Algemene live feed uit MijnCN met nominaties, partners, Academy en community-updates.'],
+            'cn-pulse' => ['name' => '📡┃cn-pulse', 'description' => 'Algemene live feed uit MijnCN met nominaties, partners en community-updates.'],
             'nieuws' => ['name' => '📰┃nieuws', 'description' => 'CN nieuws, NU.nl/NOS feed en handmatige nieuwsberichten.'],
             'verjaardagen' => ['name' => '🎂┃verjaardagen', 'description' => 'Automatische verjaardagsmeldingen.'],
             'staff-status' => ['name' => '👥┃staff-status', 'description' => 'Afwezigheid, beschikbaarheid en teamrooster-updates.'],
@@ -924,7 +926,7 @@ class MijnCnController extends Controller
         return match ($purpose) {
             'cn-pulse' => $this->discordPanelPayload(
                 'CN Pulse - live community center',
-                "Dit vaste bericht is het startpunt voor alles wat nu speelt binnen CN Community.\n\nUpdates uit MijnCN, Awards, Academy, partners en staff komen hier samen.",
+                "Dit vaste bericht is het startpunt voor alles wat nu speelt binnen Connect Next Communities.\n\nUpdates uit MijnCN, Awards, partners en staff komen hier samen.",
                 collect($pulse->statusCards())->map(fn ($card) => [
                     'name' => $card['label'],
                     'value' => $card['value'].' - '.$card['hint'],

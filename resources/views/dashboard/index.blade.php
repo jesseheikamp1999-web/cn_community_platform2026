@@ -15,10 +15,10 @@
         <div>
             <span class="dashboard-kicker">MIJN CN · {{ now()->translatedFormat('l d F') }}</span>
             <h1>{{ $greeting }}, {{ $user->name }}.</h1>
-            <p>Dit is jouw persoonlijke overzicht. Pak verder waar je gebleven was.</p>
+            <p>Dit is jouw persoonlijke overzicht binnen Connect Next. Alles wat speelt in awards, community en staff komt hier samen.</p>
         </div>
         <div class="welcome-actions">
-            <a class="button button-secondary" href="{{ route('academy.index') }}">Verder leren</a>
+            <a class="button button-secondary" href="{{ route('mijncn.module', 'pulse') }}">Open CN Pulse</a>
             <a class="button button-primary" href="{{ route('awards') }}">Naar de Awards</a>
         </div>
     </section>
@@ -31,7 +31,7 @@
         </article>
         <article class="overview-card">
             <div class="overview-icon red">@include('components.icon', ['name' => 'bolt'])</div>
-            <div><span>TOTALE XP</span><strong>{{ number_format($user->xp, 0, ',', '.') }}</strong><small>Blijf bijdragen en leren</small></div>
+            <div><span>TOTALE XP</span><strong>{{ number_format($user->xp, 0, ',', '.') }}</strong><small>Blijf bijdragen en bouwen</small></div>
         </article>
         <article class="overview-card">
             <div class="overview-icon violet">@include('components.icon', ['name' => 'ranking'])</div>
@@ -39,7 +39,7 @@
         </article>
         <article class="overview-card">
             <div class="overview-icon green">@include('components.icon', ['name' => 'award'])</div>
-            <div><span>BADGES</span><strong>{{ $badges->count() }}</strong><small>{{ $certificatesCount }} certificaten</small></div>
+            <div><span>BADGES</span><strong>{{ $badges->count() }}</strong><small>{{ $certificatesCount }} historische certificaten</small></div>
         </article>
     </section>
 
@@ -52,11 +52,11 @@
                         <h2>{{ $activeEdition->name }}</h2>
                         <p>
                             @if($activeEdition->status === 'nominations')
-                                Wie maakt verschil binnen CN? Geef die persoon het podium met een sterke nominatie.
+                                Wie maakt verschil binnen Connect Next Communities? Geef die persoon of community het podium met een sterke nominatie.
                             @elseif($activeEdition->status === 'voting')
                                 De stemronde is geopend. Laat jouw stem meetellen.
                             @else
-                                De Awards zijn in volle gang. Volg de laatste stand en finale-updates.
+                                De Awards zijn in volle gang. Volg de laatste stand, finalistupdates en revealmomenten.
                             @endif
                         </p>
                     </div>
@@ -67,7 +67,7 @@
             <section class="panel product-panel">
                 <div class="panel-heading">
                     <div><span class="panel-label">PERSOONLIJK</span><h2>Recente activiteit</h2></div>
-                    <a href="#">Alles bekijken</a>
+                    <a href="{{ route('mijncn.module', 'pulse') }}">CN Pulse</a>
                 </div>
                 <div class="activity-list">
                     @forelse($activity as $item)
@@ -80,8 +80,8 @@
                         <div class="purpose-empty">
                             <div class="empty-icon">@include('components.icon', ['name' => 'activity'])</div>
                             <h3>Jouw activiteit begint hier</h3>
-                            <p>Nomineer iemand, stem bij de Awards of start een Academy-les. Je voortgang verschijnt daarna automatisch hier.</p>
-                            <div><a class="button button-primary button-small" href="{{ route('awards') }}">Bekijk Awards</a><a class="button button-secondary button-small" href="{{ route('academy.index') }}">Ontdek Academy</a></div>
+                            <p>Nomineer iemand, stem bij de Awards of volg de laatste community- en staffupdates. Je voortgang verschijnt daarna automatisch hier.</p>
+                            <div><a class="button button-primary button-small" href="{{ route('awards') }}">Bekijk Awards</a><a class="button button-secondary button-small" href="{{ route('mijncn.module', 'pulse') }}">Open CN Pulse</a></div>
                         </div>
                     @endforelse
                 </div>
@@ -89,13 +89,13 @@
 
             <section class="panel product-panel" id="awards">
                 <div class="panel-heading">
-                    <div><span class="panel-label">CN AWARDS</span><h2>Mijn deelname</h2></div>
+                    <div><span class="panel-label">CONNECT NEXT AWARDS</span><h2>Mijn deelname</h2></div>
                     <a href="{{ route('awards') }}">Awards openen</a>
                 </div>
                 <div class="participation-summary">
                     <div><strong>{{ $nominations->count() }}</strong><span>Nominaties</span></div>
                     <div><strong>{{ $votes->count() }}</strong><span>Stemmen</span></div>
-                    <div><strong>{{ $nominations->where('status', 'winner')->count() }}</strong><span>Resultaten</span></div>
+                    <div><strong>{{ $nominations->where('status', 'winner')->count() }}</strong><span>Winnaars</span></div>
                 </div>
                 @forelse($nominations as $nomination)
                     <article class="nomination-row">
@@ -122,17 +122,17 @@
                 </div>
             </section>
 
-            <section class="panel product-panel academy-panel" id="academy">
-                <div class="panel-heading"><div><span class="panel-label">ONTWIKKELING</span><h2>Academy</h2></div><span>{{ $completedLessons }} voltooid</span></div>
-                @forelse($paths as $path)
-                    <article class="learning-path">
-                        <div class="learning-path-top"><div class="path-icon">@include('components.icon', ['name' => 'book'])</div><div><strong>{{ $path->name }}</strong><p>{{ $path->completed_lessons }} van {{ $path->lessons_count }} lessen</p></div><b>{{ $path->progress_percentage }}%</b></div>
-                        <div class="path-progress"><i style="width:{{ $path->progress_percentage }}%"></i></div>
-                    </article>
-                @empty
-                    <div class="compact-empty"><p>Er zijn nog geen leerpaden gepubliceerd.</p></div>
-                @endforelse
-                <a class="panel-action" href="{{ route('academy.index') }}">Naar Academy Wereld <span>→</span></a>
+            <section class="panel product-panel" id="community">
+                <div class="panel-heading"><div><span class="panel-label">COMMUNITY</span><h2>Connect Next netwerk</h2></div><span>{{ number_format($communityCount, 0, ',', '.') }} leden</span></div>
+                <article class="learning-path">
+                    <div class="learning-path-top"><div class="path-icon">@include('components.icon', ['name' => 'community'])</div><div><strong>Communityleden</strong><p>Via Discord gekoppelde leden binnen MijnCN</p></div><b>{{ number_format($communityCount, 0, ',', '.') }}</b></div>
+                    <div class="path-progress"><i style="width:78%"></i></div>
+                </article>
+                <article class="learning-path">
+                    <div class="learning-path-top"><div class="path-icon">@include('components.icon', ['name' => 'award'])</div><div><strong>Awards ecosystem</strong><p>Nomineer, stem en volg finalisten</p></div><b>{{ $nominations->count() + $votes->count() }}</b></div>
+                    <div class="path-progress"><i style="width:64%"></i></div>
+                </article>
+                <a class="panel-action" href="{{ route('mijncn.module', 'community') }}">Naar communityoverzicht <span>→</span></a>
             </section>
 
             <section class="panel product-panel">
@@ -140,7 +140,7 @@
                 @forelse($events as $event)
                     <article class="event-row">
                         <div class="event-date"><strong>{{ data_get($event->meta, 'starts_at') ? \Carbon\Carbon::parse(data_get($event->meta, 'starts_at'))->format('d') : $event->published_at->format('d') }}</strong><span>{{ data_get($event->meta, 'starts_at') ? \Carbon\Carbon::parse(data_get($event->meta, 'starts_at'))->translatedFormat('M') : $event->published_at->translatedFormat('M') }}</span></div>
-                        <div><strong>{{ $event->title }}</strong><p>{{ data_get($event->meta, 'location', 'CN Community') }}</p></div>
+                        <div><strong>{{ $event->title }}</strong><p>{{ data_get($event->meta, 'location', 'Connect Next') }}</p></div>
                     </article>
                 @empty
                     <div class="compact-empty"><p>Geen events gepland. Nieuwe events verschijnen hier automatisch.</p></div>

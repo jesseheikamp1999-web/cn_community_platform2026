@@ -1,122 +1,172 @@
 @extends('layouts.app')
 
 @php
-    $titles = [
-        'awards' => ['CN Awards', 'Erken de mensen die onze community bijzonder maken. Nomineer, stem en beleef de finale.'],
-        'mini-awards' => ['Mini Awards', 'Kleine momenten, grote waardering. Bekijk actuele rondes en het volledige archief.'],
-        'nieuws' => ['Nieuws', 'Verhalen, updates en ontwikkelingen uit de hele CN Community.'],
-        'partners' => ['Onze partners', 'Organisaties die samen met ons waarde toevoegen aan de community.'],
-        'staff' => ['Het CN team', 'De mensen die elke dag klaarstaan voor leden, partners en elkaar.'],
-        'contact' => ['Neem contact op', 'Een vraag, idee of iets dat je met ons wilt delen? We luisteren.'],
-        'solliciteren' => ['Bouw met ons mee', 'Ontwikkel jezelf, help anderen en maak onderdeel uit van het CN team.'],
-        'partner-worden' => ['Partner worden', 'Werk duurzaam met CN Community samen en bereik een betrokken doelgroep.'],
-    ];
-    [$title, $subtitle] = $titles[$page];
+    $meta = $content ?? [];
+    $title = $meta['title'] ?? ucfirst($page);
+    $description = $meta['description'] ?? __('public.brand.description');
+    $eyebrow = $meta['eyebrow'] ?? strtoupper($page);
 @endphp
 
-@section('title', $title.' - CN Community')
+@section('title', $title.' — '.__('public.brand.name'))
+@section('description', $description)
 
 @section('content')
-<section class="page-hero">
-    <span class="eyebrow"><i></i> CN COMMUNITY</span>
+<section class="page-hero connect-page-hero">
+    <span class="eyebrow"><i></i> {{ $eyebrow }}</span>
     <h1>{{ $title }}</h1>
-    <p>{{ $subtitle }}</p>
+    <p>{{ $description }}</p>
 </section>
-<section class="page-content">
-    @if(in_array($page, ['contact', 'solliciteren', 'partner-worden'], true))
-        <div class="install-card">
-            <h2>{{ $title }}</h2>
-            @php($formType = $page === 'solliciteren' ? 'application' : ($page === 'partner-worden' ? 'partnership' : 'contact'))
-            <form method="post" action="{{ route('forms.store', $formType) }}">
-                @csrf
-                <div class="form-row"><label>Naam</label><input name="name" required></div>
-                <div class="form-row"><label>E-mailadres</label><input type="email" name="email" required></div>
-                <div class="form-row"><label>{{ $page === 'solliciteren' ? 'Gewenste rol' : 'Onderwerp' }}</label><input name="subject"></div>
-                @if($page === 'solliciteren')
-                    <div class="form-row"><label>Leeftijd</label><input type="number" name="age" min="16" max="99" required></div>
-                    <div class="form-row"><label>Relevante ervaring</label><textarea name="experience" rows="4" required placeholder="Vertel over communitywerk, moderatie, support of andere relevante ervaring."></textarea></div>
-                    <div class="form-row"><label>Beschikbaarheid</label><textarea name="availability" rows="3" required placeholder="Op welke dagen en momenten ben je meestal beschikbaar?"></textarea></div>
-                @endif
-                <div class="form-row"><label>{{ $page === 'solliciteren' ? 'Motivatie' : 'Vertel ons meer' }}</label><textarea name="message" rows="6" required></textarea></div>
-                <button class="button button-primary" type="submit">Versturen <span>&rarr;</span></button>
-            </form>
-        </div>
-    @else
-        @if($page === 'staff')
-            <div class="staff-filter-bar">
-                @foreach($staffFilters ?? [] as $filterKey => $filterLabel)
+
+<section class="page-content connect-page-content">
+    @if(!empty($meta['bullets']))
+        <section class="connect-block">
+            <div class="feature-grid">
+                @foreach($meta['bullets'] as $bullet)
+                    <article class="feature-card compact">
+                        <div class="feature-icon">✦</div>
+                        <h3>{{ $bullet }}</h3>
+                        <p>{{ __('public.brand.name') }} builds this service inside a scalable, premium and future-ready delivery model.</p>
+                    </article>
+                @endforeach
+            </div>
+        </section>
+    @endif
+
+    @if($page === 'communities')
+        <section class="connect-block">
+            <div class="section-top">
+                <div><span class="eyebrow"><i></i> COMMUNITIES</span><h2>Existing CN community power,<br><em>refreshed under Connect Next.</em></h2></div>
+                <a class="text-link" href="{{ route('staff') }}">Staff page →</a>
+            </div>
+            <div class="content-grid">
+                <article class="content-card">
+                    <h3>CN Community</h3>
+                    <p>The current community ecosystem stays active, but receives a more premium international identity and clearer positioning inside Connect Next.</p>
+                </article>
+                <article class="content-card">
+                    <h3>Discord & Events</h3>
+                    <p>From moderation and events to partnerships and growth campaigns, the community layer remains a strategic product instead of an afterthought.</p>
+                </article>
+                <article class="content-card">
+                    <h3>Awards as flagship</h3>
+                    <p>The awards platform remains fully functional and becomes one of the strongest public pillars of the entire brand.</p>
+                </article>
+            </div>
+        </section>
+        @if(!empty($staff))
+            <section class="connect-block">
+                <div class="section-top">
+                    <div><span class="eyebrow"><i></i> STAFF</span><h2>People building the experience.</h2></div>
+                    <a class="text-link" href="{{ route('staff') }}">Open full staff page →</a>
+                </div>
+                <div class="people-grid">
+                    @foreach($staff as $member)
+                        <article>
+                            <div class="portrait" @if($member->staffProfile?->cover_image || $member->discord_avatar_url) style="background-image:url('{{ $member->staffProfile?->cover_image ?: $member->discord_avatar_url }}'); background-size:cover; background-position:center;" @endif>
+                                @if(! $member->staffProfile?->cover_image && ! $member->discord_avatar_url)
+                                    {{ strtoupper(substr($member->name, 0, 2)) }}
+                                @endif
+                            </div>
+                            <h3>{{ $member->name }}</h3>
+                            <p>{{ $member->publicPosition() }}</p>
+                        </article>
+                    @endforeach
+                </div>
+            </section>
+        @endif
+    @endif
+
+    @if(in_array($page, ['projects', 'partners'], true) && isset($items))
+        <section class="connect-block">
+            <div class="section-top">
+                <div><span class="eyebrow"><i></i> PROJECTS</span><h2>Partners, products and communities<br><em>that live inside the network.</em></h2></div>
+            </div>
+            <div class="content-grid">
+                @forelse($items as $item)
+                    <a class="content-card partner-card-link" href="{{ $item->website_url ?: $item->discord_invite ?: '#' }}" target="_blank" rel="noopener">
+                        <h3>{{ $item->name }}</h3>
+                        <p>{{ $item->description ?: 'Active within the Connect Next ecosystem.' }}</p>
+                    </a>
+                @empty
+                    <div class="empty-state"><h3>No projects published yet</h3><p>New partners and products will appear here.</p></div>
+                @endforelse
+            </div>
+        </section>
+    @endif
+
+    @if($page === 'about' && isset($staff))
+        <section class="connect-block">
+            <div class="section-top">
+                <div><span class="eyebrow"><i></i> PEOPLE</span><h2>Technology becomes stronger<br><em>when real people stay visible.</em></h2></div>
+            </div>
+            <div class="people-grid">
+                @foreach($staff as $member)
+                    <article>
+                        <div class="portrait" @if($member->staffProfile?->cover_image || $member->discord_avatar_url) style="background-image:url('{{ $member->staffProfile?->cover_image ?: $member->discord_avatar_url }}'); background-size:cover; background-position:center;" @endif>
+                            @if(! $member->staffProfile?->cover_image && ! $member->discord_avatar_url)
+                                {{ strtoupper(substr($member->name, 0, 2)) }}
+                            @endif
+                        </div>
+                        <h3>{{ $member->name }}</h3>
+                        <p>{{ $member->publicPosition() }}</p>
+                    </article>
+                @endforeach
+            </div>
+        </section>
+    @endif
+
+    @if($page === 'staff' && isset($items))
+        <section class="connect-block">
+            <div class="staff-filter-row">
+                @foreach($staffFilters as $filterKey => $filterLabel)
                     <a class="{{ request('team', 'all') === $filterKey ? 'active' : '' }}" href="{{ $filterKey === 'all' ? route('staff') : route('staff', ['team' => $filterKey]) }}">{{ $filterLabel }}</a>
                 @endforeach
             </div>
-            @if($teamMemberOfMonth && request('team', 'all') === 'all')
-                <article class="staff-month-card">
-                    <div class="staff-public-avatar">@include('components.user-avatar', ['user' => $teamMemberOfMonth])</div>
-                    <div>
-                        <span class="eyebrow"><i></i> TEAM VAN DE MAAND</span>
-                        <h2>{{ $teamMemberOfMonth->name }}</h2>
-                        <p>{{ $teamMemberOfMonth->staffProfile?->bio ?: $teamMemberOfMonth->profile_bio ?: 'Een zichtbaar voorbeeld voor de community.' }}</p>
-                    </div>
-                    <span class="staff-role-badge role-{{ $teamMemberOfMonth->role->value }}">{{ $teamMemberOfMonth->publicPosition() }}</span>
-                </article>
-            @endif
-        @endif
-        <div class="content-grid {{ $page === 'staff' ? 'staff-public-grid' : '' }}">
-            @forelse($items as $item)
-                @if($page === 'staff')
-                    @php($statusKey = $item->staffStatusKey())
-                    @php($specialties = collect($item->staffProfile?->specialties ?? [])->filter())
-                    <details class="content-card staff-public-card">
-                        <summary>
-                            <div class="staff-public-head">
-                                <div class="staff-public-avatar">@include('components.user-avatar', ['user' => $item])</div>
-                                <div>
-                                    <span class="eyebrow"><i></i> CN STAFF</span>
-                                    <h3>{{ $item->name }}</h3>
-                                    <div class="staff-public-role">{{ $item->publicPosition() }}</div>
-                                </div>
-                            </div>
-                            <span class="staff-role-badge role-{{ $item->role->value }}">{{ $item->role->label() }}</span>
-                        </summary>
-                        <p>{{ $item->staffProfile?->bio ?: $item->profile_bio ?: 'Staat klaar voor de community en helpt CN verder groeien.' }}</p>
-                        @if($specialties->isNotEmpty())
-                            <div class="staff-specialties">@foreach($specialties as $specialty)<span>{{ $specialty }}</span>@endforeach</div>
-                        @endif
-                        <div class="staff-mini-profile">
-                            <div>
-                                <strong>Functie</strong>
-                                <span>{{ $item->publicPosition() }}</span>
+            <div class="content-grid staff-grid">
+                @forelse($items as $member)
+                    <article class="content-card staff-public-card">
+                        <div class="staff-public-head">
+                            <div class="staff-public-avatar">
+                                @if($member->staffProfile?->cover_image || $member->discord_avatar_url)
+                                    <img src="{{ $member->staffProfile?->cover_image ?: $member->discord_avatar_url }}" alt="{{ $member->name }}">
+                                @else
+                                    <span>{{ strtoupper(substr($member->name, 0, 2)) }}</span>
+                                @endif
                             </div>
                             <div>
-                                <strong>Discord</strong>
-                                @if($item->staffProfile?->discord_url)<a href="{{ $item->staffProfile->discord_url }}" target="_blank" rel="noopener noreferrer">Open profiel</a>@else<span>{{ '@'.($item->discord_username ?: $item->name) }}</span>@endif
+                                <small class="dashboard-kicker">CONNECT NEXT TEAM</small>
+                                <h3>{{ $member->name }}</h3>
+                                <p>{{ $member->publicPosition() }}</p>
                             </div>
                         </div>
-                        <span class="availability staff-status status-{{ $statusKey }}" title="{{ $item->staffStatusLabel() }}">{{ $item->staffStatusLabel() }}</span>
-                    </details>
-                @elseif($page === 'partners')
-                    <article class="content-card partner-public-card">
-                        @if($item->logo_url)
-                            <img class="content-partner-logo" src="{{ $item->logo_url }}" alt="">
-                        @else
-                            <div class="content-partner-mark">{{ strtoupper(substr($item->name, 0, 1)) }}</div>
-                        @endif
-                        <span class="eyebrow"><i></i> CN PARTNER</span>
-                        <h3>{{ $item->name }}</h3>
-                        <p>{{ $item->description ?: 'Samenwerking binnen de CN Community.' }}</p>
-                        <div class="partner-public-score"><span>#{{ $item->position ?? $loop->iteration }}</span><b>{{ $item->score ?? 0 }}/100</b><em>{{ ucfirst($item->category ?? 'partner') }}</em></div>
-                        @if($item->destination_url)<a class="text-link" href="{{ $item->destination_url }}" target="_blank" rel="noopener noreferrer">Bezoek {{ $item->name }} &rarr;</a>@endif
+                        <p>{{ $member->staffProfile?->bio ?: 'Building better experiences, stronger communities and steady progress inside Connect Next.' }}</p>
+                        <span class="status {{ $member->is_currently_absent ? 'status-rejected' : 'status-approved' }}">{{ $member->is_currently_absent ? 'Afwezig' : 'Beschikbaar' }}</span>
                     </article>
-                @else
-                    <article class="content-card">
-                        <span class="eyebrow"><i></i> {{ strtoupper($item->type ?? 'CN') }}</span>
-                        <h3>{{ $item->title ?? $item->name }}</h3>
-                        <p>{{ $item->excerpt ?? $item->description ?? 'Samen bouwen we aan een sterke en betrokken community.' }}</p>
-                    </article>
-                @endif
-            @empty
-                <div class="empty-state"><h3>Binnenkort meer</h3><p>Deze pagina wordt op dit moment gevuld.</p></div>
-            @endforelse
-        </div>
+                @empty
+                    <div class="empty-state"><h3>No staff available</h3><p>The team overview will appear here once profiles are published.</p></div>
+                @endforelse
+            </div>
+        </section>
+    @endif
+
+    @if(in_array($page, ['contact', 'apply', 'partner'], true))
+        <section class="connect-block">
+            <div class="module-card">
+                <div class="module-card-heading">
+                    <div><span>{{ strtoupper($eyebrow) }}</span><h2>{{ $title }}</h2></div>
+                </div>
+                <form class="module-form" method="post" action="{{ route('forms.store', $meta['form_type'] ?? 'contact') }}">
+                    @csrf
+                    <div class="module-form-grid">
+                        <label>Name<input type="text" name="name" required></label>
+                        <label>Email<input type="email" name="email" required></label>
+                    </div>
+                    <label>Subject<input type="text" name="subject" required></label>
+                    <label>Message<textarea name="message" rows="6" required></textarea></label>
+                    <button class="button button-primary">{{ app()->getLocale() === 'en' ? 'Send request' : 'Verstuur aanvraag' }}</button>
+                </form>
+            </div>
+        </section>
     @endif
 </section>
 @endsection

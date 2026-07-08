@@ -1,4 +1,16 @@
 document.addEventListener('DOMContentLoaded', () => {
+    const themeToggle = document.querySelector('[data-theme-toggle]');
+    const root = document.documentElement;
+    const storedTheme = localStorage.getItem('connect-next-theme');
+    if (storedTheme) {
+        root.setAttribute('data-theme', storedTheme);
+    }
+    themeToggle?.addEventListener('click', () => {
+        const nextTheme = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+        root.setAttribute('data-theme', nextTheme);
+        localStorage.setItem('connect-next-theme', nextTheme);
+    });
+
     const toggle = document.querySelector('[data-nav-toggle]');
     const nav = document.querySelector('[data-nav]');
     toggle?.addEventListener('click', () => nav?.classList.toggle('open'));

@@ -91,7 +91,7 @@ class DiscordController extends Controller
                 ->withErrors(['discord' => 'De Discord-login kon niet worden afgerond. Probeer opnieuw.']);
         }
 
-        return redirect()->intended(route('dashboard'))->with('success', 'Welkom terug bij CN Community.');
+        return redirect()->intended(route('dashboard'))->with('success', 'Welkom terug bij Connect Next.');
     }
 
     public function logout(Request $request)
@@ -100,7 +100,7 @@ class DiscordController extends Controller
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
-        return redirect()->route('home');
+        return redirect()->route('home', ['locale' => session('public_locale', app()->getLocale())]);
     }
 
     private function syncPermissions(User $user): void
@@ -109,10 +109,10 @@ class DiscordController extends Controller
             \App\Enums\UserRole::Owner => Permission::pluck('id'),
             \App\Enums\UserRole::Management => Permission::whereIn('name', [
                 'staff.access', 'awards.review', 'awards.manage', 'tasks.manage',
-                'academy.manage', 'hr.manage', 'partners.manage', 'content.manage', 'audit.view',
+                'hr.manage', 'partners.manage', 'content.manage', 'audit.view',
             ])->pluck('id'),
             \App\Enums\UserRole::Admin => Permission::whereIn('name', [
-                'staff.access', 'awards.review', 'tasks.manage', 'academy.manage', 'content.manage',
+                'staff.access', 'awards.review', 'tasks.manage', 'content.manage',
             ])->pluck('id'),
             \App\Enums\UserRole::Moderator, \App\Enums\UserRole::Helper => Permission::whereIn('name', [
                 'staff.access',

@@ -14,6 +14,42 @@ class HomeController extends Controller
 {
     public function __invoke(ContentRepository $content)
     {
+        $locale = app()->getLocale();
+        $divisionCards = [
+            [
+                'eyebrow' => 'Connect Next AI',
+                'title' => $locale === 'en' ? 'AI strategy, automation and premium content.' : 'AI-strategie, automatisering en premium content.',
+                'description' => $locale === 'en'
+                    ? 'Consulting, prompt engineering, AI content, voice, photo and workflow automation.'
+                    : 'Consulting, prompt engineering, AI-content, voice, fotografie en workflow-automatisering.',
+                'url' => route('ai'),
+            ],
+            [
+                'eyebrow' => 'Connect Next Development',
+                'title' => $locale === 'en' ? 'Custom software that moves with your business.' : 'Maatwerksoftware die met je bedrijf meebeweegt.',
+                'description' => $locale === 'en'
+                    ? 'Websites, SaaS, portals, dashboards, apps and integrations built for growth.'
+                    : 'Websites, SaaS, portals, dashboards, apps en integraties gebouwd voor groei.',
+                'url' => route('development'),
+            ],
+            [
+                'eyebrow' => 'Connect Next Communities',
+                'title' => $locale === 'en' ? 'Communities, events and partnerships with real momentum.' : 'Communities, events en partnerships met echte energie.',
+                'description' => $locale === 'en'
+                    ? 'The CN Community platform continues under a stronger global brand while keeping its heart.'
+                    : 'Het CN Community-platform leeft door onder een sterker internationaal merk, zonder de ziel te verliezen.',
+                'url' => route('communities'),
+            ],
+            [
+                'eyebrow' => 'Connect Next Awards',
+                'title' => $locale === 'en' ? 'A premium annual event for recognition and reputation.' : 'Een premium jaarlijks event voor erkenning en reputatie.',
+                'description' => $locale === 'en'
+                    ? 'Nominations, voting, jury scoring and finalist experiences that feel event-worthy.'
+                    : 'Nominaties, stemmen, jurybeoordeling en finalistprofielen die voelen als een echt event.',
+                'url' => route('awards'),
+            ],
+        ];
+
         $partners = Partner::where('status', 'active');
         if (Schema::hasColumn('partners', 'is_featured')) {
             $partners->where('is_featured', true)
@@ -40,13 +76,37 @@ class HomeController extends Controller
                     ELSE 6 END")
                 ->limit(4)
                 ->get(),
+            'divisionCards' => $divisionCards,
+            'testimonials' => [
+                [
+                    'quote' => $locale === 'en'
+                        ? 'Connect Next combines technical clarity with brand feeling. It never feels generic.'
+                        : 'Connect Next combineert technische scherpte met merkgevoel. Het voelt nooit generiek.',
+                    'name' => 'StudioNova',
+                    'role' => $locale === 'en' ? 'Creative Partner' : 'Creative partner',
+                ],
+                [
+                    'quote' => $locale === 'en'
+                        ? 'The awards experience already feels bigger, cleaner and more trustworthy.'
+                        : 'De awardervaring voelt nu al groter, schoner en betrouwbaarder.',
+                    'name' => 'CN Awards Jury',
+                    'role' => $locale === 'en' ? 'Platform feedback' : 'Platform feedback',
+                ],
+                [
+                    'quote' => $locale === 'en'
+                        ? 'From community to software thinking: this is the kind of platform you can build on for years.'
+                        : 'Van community tot softwaredenken: dit is het soort platform waarop je jaren kunt doorbouwen.',
+                    'name' => 'Cloud86',
+                    'role' => $locale === 'en' ? 'Infrastructure partner' : 'Infrastructuurpartner',
+                ],
+            ],
             'stats' => [
                 'members' => Schema::hasTable('discord_members')
                     ? DB::table('discord_members')->where('is_active', true)->where('is_bot', false)->count()
                     : User::whereNotNull('discord_id')->where('discord_id', '!=', '')->count(),
                 'votes' => DB::table('votes')->where('is_valid', true)->count(),
                 'awards' => DB::table('award_winners')->count(),
-                'lessons' => DB::table('lessons')->count(),
+                'projects' => Partner::where('status', 'active')->count(),
             ],
         ]);
     }

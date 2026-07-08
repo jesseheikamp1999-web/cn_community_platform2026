@@ -22,7 +22,6 @@ class CnPulseService
             ->merge($this->birthdayItems())
             ->merge($this->staffItems())
             ->merge($this->partnerItems())
-            ->merge($this->academyItems())
             ->sortByDesc('date')
             ->take($limit)
             ->values();
@@ -70,7 +69,7 @@ class CnPulseService
             ->map(fn (Content $content) => $this->item(
                 'Nieuws',
                 $content->title,
-                $content->excerpt ?: 'Nieuw bericht uit CN Community.',
+                $content->excerpt ?: 'Nieuwe update uit Connect Next.',
                 $content->published_at,
                 route('news.show', $content)
             ));
@@ -165,31 +164,9 @@ class CnPulseService
             ->map(fn (Partner $partner) => $this->item(
                 'Partners',
                 $partner->name,
-                $partner->description ?: 'Actieve CN partner.',
+                $partner->description ?: 'Actieve partner binnen Connect Next.',
                 $partner->created_at,
                 route('partners')
-            ));
-    }
-
-    private function academyItems(): Collection
-    {
-        if (!Schema::hasTable('certificates')) {
-            return collect();
-        }
-
-        return DB::table('certificates')
-            ->join('users', 'users.id', '=', 'certificates.user_id')
-            ->join('learning_paths', 'learning_paths.id', '=', 'certificates.learning_path_id')
-            ->select('certificates.*', 'users.name as user_name', 'learning_paths.name as path_name')
-            ->latest('issued_at')
-            ->limit(4)
-            ->get()
-            ->map(fn ($certificate) => $this->item(
-                'Academy',
-                $certificate->user_name.' behaalde een certificaat',
-                $certificate->path_name,
-                $certificate->issued_at,
-                route('mijncn.module', 'certificates')
             ));
     }
 

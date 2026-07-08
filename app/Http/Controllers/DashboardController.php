@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\AwardEdition;
 use App\Models\Content;
-use App\Models\LearningPath;
 use App\Models\Task;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Carbon;
@@ -29,32 +28,6 @@ class DashboardController extends Controller
             ? $user->badges()->latest('badge_user.awarded_at')->limit(6)->get()
             : collect();
 
-        $progressByPath = Schema::hasTable('lesson_progress') && Schema::hasTable('lessons')
-            ? DB::table('lesson_progress')
-                ->join('lessons', 'lessons.id', '=', 'lesson_progress.lesson_id')
-                ->where('lesson_progress.user_id', $user->id)
-                ->selectRaw('lessons.learning_path_id, COUNT(*) as started, SUM(CASE WHEN lesson_progress.status = ? THEN 1 ELSE 0 END) as completed', ['passed'])
-                ->groupBy('lessons.learning_path_id')
-                ->get()
-                ->keyBy('learning_path_id')
-            : collect();
-
-        $paths = Schema::hasTable('learning_paths') && Schema::hasTable('lessons')
-            ? LearningPath::where('is_published', true)
-                ->withCount('lessons')
-                ->limit(3)
-                ->get()
-                ->map(function (LearningPath $path) use ($progressByPath) {
-                    $progress = $progressByPath->get($path->id);
-                    $path->completed_lessons = (int) ($progress->completed ?? 0);
-                    $path->progress_percentage = $path->lessons_count > 0
-                        ? (int) round($path->completed_lessons / $path->lessons_count * 100)
-                        : 0;
-
-                    return $path;
-                })
-            : collect();
-
         $ranking = UserRanking::forUser($user->id);
         $activity = $this->activity($nominations, $votes, $badges);
 
@@ -63,7 +36,6 @@ class DashboardController extends Controller
             'nominations' => $nominations,
             'votes' => $votes,
             'badges' => $badges,
-            'paths' => $paths,
             'notifications' => Schema::hasTable('notifications') ? $user->notifications()->latest()->limit(5)->get() : collect(),
             'activity' => $activity,
             'ranking' => $ranking,
@@ -83,9 +55,9 @@ class DashboardController extends Controller
             'certificatesCount' => Schema::hasTable('certificates')
                 ? DB::table('certificates')->where('user_id', $user->id)->count()
                 : 0,
-            'completedLessons' => Schema::hasTable('lesson_progress')
-                ? DB::table('lesson_progress')->where('user_id', $user->id)->where('status', 'passed')->count()
-                : 0,
+            'communityCount' => Schema::hasTable('discord_members')
+                ? DB::table('discord_members')->where('is_active', true)->where('is_bot', false)->count()
+                : DB::table('users')->count(),
         ])->render();
 
         return response($html);

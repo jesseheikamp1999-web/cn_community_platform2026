@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\EnsureInstallationCompleted;
+use App\Http\Middleware\SetPublicLocale;
 use App\Http\Middleware\EnsureUserHasPermission;
 use App\Http\Middleware\LogUserActivity;
 use Illuminate\Foundation\Application;
@@ -19,6 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->web(append: [LogUserActivity::class]);
         $middleware->alias([
             'permission' => EnsureUserHasPermission::class,
+            'public.locale' => SetPublicLocale::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

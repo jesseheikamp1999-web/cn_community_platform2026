@@ -15,6 +15,8 @@ class HomeController extends Controller
     public function __invoke(ContentRepository $content)
     {
         $locale = app()->getLocale();
+        $localized = fn (string $route, array $parameters = []) => route($route, ['locale' => $locale] + $parameters);
+
         $divisionCards = [
             [
                 'eyebrow' => 'Connect Next AI',
@@ -22,7 +24,7 @@ class HomeController extends Controller
                 'description' => $locale === 'en'
                     ? 'Consulting, prompt engineering, AI content, voice, photo and workflow automation.'
                     : 'Consulting, prompt engineering, AI-content, voice, fotografie en workflow-automatisering.',
-                'url' => route('ai'),
+                'url' => $localized('ai'),
             ],
             [
                 'eyebrow' => 'Connect Next Development',
@@ -30,7 +32,7 @@ class HomeController extends Controller
                 'description' => $locale === 'en'
                     ? 'Websites, SaaS, portals, dashboards, apps and integrations built for growth.'
                     : 'Websites, SaaS, portals, dashboards, apps en integraties gebouwd voor groei.',
-                'url' => route('development'),
+                'url' => $localized('development'),
             ],
             [
                 'eyebrow' => 'Connect Next Communities',
@@ -38,7 +40,7 @@ class HomeController extends Controller
                 'description' => $locale === 'en'
                     ? 'The CN Community platform continues under a stronger global brand while keeping its heart.'
                     : 'Het CN Community-platform leeft door onder een sterker internationaal merk, zonder de ziel te verliezen.',
-                'url' => route('communities'),
+                'url' => $localized('communities'),
             ],
             [
                 'eyebrow' => 'Connect Next Awards',
@@ -46,7 +48,7 @@ class HomeController extends Controller
                 'description' => $locale === 'en'
                     ? 'Nominations, voting, jury scoring and finalist experiences that feel event-worthy.'
                     : 'Nominaties, stemmen, jurybeoordeling en finalistprofielen die voelen als een echt event.',
-                'url' => route('awards'),
+                'url' => $localized('awards'),
             ],
         ];
 

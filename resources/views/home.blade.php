@@ -1,9 +1,11 @@
 @extends('layouts.app')
 
-@section('title', __('public.brand.name').' — '.__('public.brand.tagline'))
+@section('title', __('public.brand.name').' - '.__('public.brand.tagline'))
 @section('description', __('public.brand.description'))
 
 @section('content')
+@php($locale = app()->getLocale())
+@php($localizedRoute = fn (string $name, array $parameters = []) => route($name, ['locale' => $locale] + $parameters))
 <section class="home-hero connect-home-hero">
     <div class="home-hero-inner">
         <div class="home-product-stage">
@@ -45,8 +47,8 @@
                     </div>
                 </div>
             </div>
-            <div class="stage-card stage-award"><span>◆</span><div><small>FLAGSHIP</small><strong>Connect Next Awards</strong></div></div>
-            <div class="stage-card stage-community"><i></i><div><small>COMMUNITIES</small><strong>Discord, events & partnerships</strong></div></div>
+            <div class="stage-card stage-award"><span>&#9670;</span><div><small>FLAGSHIP</small><strong>Connect Next Awards</strong></div></div>
+            <div class="stage-card stage-community"><i></i><div><small>COMMUNITIES</small><strong>Discord, events &amp; partnerships</strong></div></div>
         </div>
 
         <div class="home-hero-copy">
@@ -54,8 +56,8 @@
             <h1>{{ __('public.hero.title') }} <em>{{ __('public.hero.highlight') }}</em></h1>
             <p>{{ __('public.hero.description') }}</p>
             <div class="hero-actions">
-                <a class="button button-primary" href="{{ route('contact') }}">{{ __('public.hero.primary') }}</a>
-                <a class="text-link" href="#divisions">{{ __('public.hero.secondary') }} <span>↓</span></a>
+                <a class="button button-primary" href="{{ $localizedRoute('contact') }}">{{ __('public.hero.primary') }}</a>
+                <a class="text-link" href="#divisions">{{ __('public.hero.secondary') }} <span>&darr;</span></a>
             </div>
             <div class="hero-proof-row">
                 <div class="avatar-stack"><span>AI</span><span>DEV</span><span>COM</span><span>AW</span></div>
@@ -79,12 +81,12 @@
     <div class="feature-grid">
         @foreach($divisionCards as $card)
             <article class="feature-card {{ str_contains($card['eyebrow'], 'Awards') ? 'featured' : '' }}">
-                <span class="feature-number">{{ str_pad((string) ($loop->iteration), 2, '0', STR_PAD_LEFT) }}</span>
-                <div class="feature-icon">{{ $loop->iteration === 1 ? '✦' : ($loop->iteration === 2 ? '▣' : ($loop->iteration === 3 ? '◎' : '◆')) }}</div>
+                <span class="feature-number">{{ str_pad((string) $loop->iteration, 2, '0', STR_PAD_LEFT) }}</span>
+                <div class="feature-icon">{{ $loop->iteration === 1 ? '&#10022;' : ($loop->iteration === 2 ? '&#9635;' : ($loop->iteration === 3 ? '&#9710;' : '&#9670;')) }}</div>
                 <small class="dashboard-kicker">{{ $card['eyebrow'] }}</small>
                 <h3>{{ $card['title'] }}</h3>
                 <p>{{ $card['description'] }}</p>
-                <a href="{{ $card['url'] }}">Open division →</a>
+                <a href="{{ $card['url'] }}">Open division &rarr;</a>
             </article>
         @endforeach
     </div>
@@ -100,7 +102,7 @@
             <span>{{ number_format($stats['awards'], 0, ',', '.') }}</span><small>WINNERS</small><b>:</b>
             <span>{{ count($winners) }}</span><small>SPOTLIGHTS</small>
         </div>
-        <a class="button button-light" href="{{ route('awards') }}">Open Awards <span>→</span></a>
+        <a class="button button-light" href="{{ $localizedRoute('awards') }}">Open Awards <span>&rarr;</span></a>
     </div>
     <div class="award-trophy">
         <div class="trophy-glow"></div>
@@ -115,11 +117,11 @@
             <span class="eyebrow"><i></i> {{ __('public.sections.stories') }}</span>
             <h2>Stories worth<br><em>sharing forward.</em></h2>
         </div>
-        <a class="text-link" href="{{ route('nieuws') }}">{{ __('public.nav.news') }} →</a>
+        <a class="text-link" href="{{ $localizedRoute('nieuws') }}">{{ __('public.nav.news') }} &rarr;</a>
     </div>
     <div class="news-grid">
         @forelse($news as $article)
-            <a class="news-card {{ $loop->first ? 'large' : '' }}" href="{{ route('news.show', $article) }}">
+            <a class="news-card {{ $loop->first ? 'large' : '' }}" href="{{ $localizedRoute('news.show', ['content' => $article]) }}">
                 <div class="news-image gradient-{{ ($loop->index % 3) + 1 }}" @if($article->cover_image) style="background-image:url('{{ $article->cover_image }}'); background-size:cover; background-position:center;" @endif>
                     <span>{{ strtoupper(data_get($article->meta, 'source', 'CONNECT NEXT')) }}</span>
                 </div>
@@ -127,7 +129,7 @@
                     <small>{{ $article->published_at?->translatedFormat('d M Y') }}</small>
                     <h3>{{ $article->title }}</h3>
                     <p>{{ $article->excerpt }}</p>
-                    <strong>Read more →</strong>
+                    <strong>Read more &rarr;</strong>
                 </div>
             </a>
         @empty
@@ -157,7 +159,7 @@
             <span class="eyebrow"><i></i> {{ __('public.sections.communities') }}</span>
             <h2>The people behind<br><em>the movement.</em></h2>
         </div>
-        <a class="text-link" href="{{ route('staff') }}">Meet the team →</a>
+        <a class="text-link" href="{{ $localizedRoute('staff') }}">Meet the team &rarr;</a>
     </div>
     <div class="people-grid">
         @foreach($staff as $member)
@@ -185,7 +187,7 @@
     <div class="feature-grid">
         @foreach($testimonials as $testimonial)
             <article class="feature-card">
-                <div class="feature-icon">“</div>
+                <div class="feature-icon">&ldquo;</div>
                 <h3>{{ $testimonial['name'] }}</h3>
                 <p>{{ $testimonial['quote'] }}</p>
                 <a href="#">{{ $testimonial['role'] }}</a>
@@ -200,8 +202,8 @@
         <h2>Connect Next.<br><em>Built for what comes after today.</em></h2>
         <p>Whether you need AI execution, custom software, stronger communities or a premium awards experience, we can build the next step together.</p>
         <div class="hero-actions">
-            <a class="button button-primary" href="{{ route('contact') }}">{{ __('public.hero.primary') }}</a>
-            <a class="button button-light" href="{{ route('projects') }}">{{ __('public.nav.projects') }}</a>
+            <a class="button button-primary" href="{{ $localizedRoute('contact') }}">{{ __('public.hero.primary') }}</a>
+            <a class="button button-light" href="{{ $localizedRoute('projects') }}">{{ __('public.nav.projects') }}</a>
         </div>
     </div>
     <div class="cta-mark">CN</div>

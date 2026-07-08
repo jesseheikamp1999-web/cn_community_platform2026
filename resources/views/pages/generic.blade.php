@@ -5,9 +5,11 @@
     $title = $meta['title'] ?? ucfirst($page);
     $description = $meta['description'] ?? __('public.brand.description');
     $eyebrow = $meta['eyebrow'] ?? strtoupper($page);
+    $locale = app()->getLocale();
+    $localizedRoute = fn (string $name, array $parameters = []) => route($name, ['locale' => $locale] + $parameters);
 @endphp
 
-@section('title', $title.' — '.__('public.brand.name'))
+@section('title', $title.' - '.__('public.brand.name'))
 @section('description', $description)
 
 @section('content')
@@ -18,12 +20,12 @@
 </section>
 
 <section class="page-content connect-page-content">
-    @if(!empty($meta['bullets']))
+    @if(! empty($meta['bullets']))
         <section class="connect-block">
             <div class="feature-grid">
                 @foreach($meta['bullets'] as $bullet)
                     <article class="feature-card compact">
-                        <div class="feature-icon">✦</div>
+                        <div class="feature-icon">&#10022;</div>
                         <h3>{{ $bullet }}</h3>
                         <p>{{ __('public.brand.name') }} builds this service inside a scalable, premium and future-ready delivery model.</p>
                     </article>
@@ -36,7 +38,7 @@
         <section class="connect-block">
             <div class="section-top">
                 <div><span class="eyebrow"><i></i> COMMUNITIES</span><h2>Existing CN community power,<br><em>refreshed under Connect Next.</em></h2></div>
-                <a class="text-link" href="{{ route('staff') }}">Staff page →</a>
+                <a class="text-link" href="{{ $localizedRoute('staff') }}">Staff page &rarr;</a>
             </div>
             <div class="content-grid">
                 <article class="content-card">
@@ -44,7 +46,7 @@
                     <p>The current community ecosystem stays active, but receives a more premium international identity and clearer positioning inside Connect Next.</p>
                 </article>
                 <article class="content-card">
-                    <h3>Discord & Events</h3>
+                    <h3>Discord &amp; Events</h3>
                     <p>From moderation and events to partnerships and growth campaigns, the community layer remains a strategic product instead of an afterthought.</p>
                 </article>
                 <article class="content-card">
@@ -53,11 +55,11 @@
                 </article>
             </div>
         </section>
-        @if(!empty($staff))
+        @if(! empty($staff))
             <section class="connect-block">
                 <div class="section-top">
                     <div><span class="eyebrow"><i></i> STAFF</span><h2>People building the experience.</h2></div>
-                    <a class="text-link" href="{{ route('staff') }}">Open full staff page →</a>
+                    <a class="text-link" href="{{ $localizedRoute('staff') }}">Open full staff page &rarr;</a>
                 </div>
                 <div class="people-grid">
                     @foreach($staff as $member)
@@ -119,7 +121,7 @@
         <section class="connect-block">
             <div class="staff-filter-row">
                 @foreach($staffFilters as $filterKey => $filterLabel)
-                    <a class="{{ request('team', 'all') === $filterKey ? 'active' : '' }}" href="{{ $filterKey === 'all' ? route('staff') : route('staff', ['team' => $filterKey]) }}">{{ $filterLabel }}</a>
+                    <a class="{{ request('team', 'all') === $filterKey ? 'active' : '' }}" href="{{ $filterKey === 'all' ? $localizedRoute('staff') : $localizedRoute('staff', ['team' => $filterKey]) }}">{{ $filterLabel }}</a>
                 @endforeach
             </div>
             <div class="content-grid staff-grid">

@@ -21,7 +21,10 @@ class AppServiceProvider extends ServiceProvider
         $locale = 'nl';
 
         if (! $this->app->runningInConsole()) {
-            $locale = session('public_locale', App::currentLocale() ?: 'nl');
+            $locale = request()->route('locale')
+                ?? session('public_locale')
+                ?? App::currentLocale()
+                ?? 'nl';
         }
 
         URL::defaults(['locale' => $locale]);

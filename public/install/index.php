@@ -10,7 +10,6 @@ session_start();
 $basePath = dirname(__DIR__, 2);
 $autoload = $basePath.'/vendor/autoload.php';
 $bootstrap = $basePath.'/bootstrap/app.php';
-$environmentPath = $basePath.'/.env';
 $examplePath = $basePath.'/.env.example';
 $installedMarker = $basePath.'/storage/app/installed';
 $bootstrapCachePath = $basePath.'/bootstrap/cache';
@@ -45,6 +44,43 @@ function envData(string $path): array
     }
 
     return $values;
+}
+
+function resolveEnvironmentPath(string $basePath): string
+{
+    $candidates = [
+        $basePath.'/.env',
+        dirname($basePath).'/.env',
+        dirname($basePath, 2).'/.env',
+        dirname($basePath, 3).'/.env',
+        $basePath.'/public/.env',
+    ];
+
+    $fallback = $candidates[0];
+    $bestPath = $fallback;
+    $bestScore = -1;
+
+    foreach ($candidates as $candidate) {
+        if (!is_file($candidate)) {
+            continue;
+        }
+
+        $environment = envData($candidate);
+        $score = 0;
+
+        foreach (['APP_NAME', 'APP_ENV', 'DB_HOST', 'DB_DATABASE', 'DB_USERNAME'] as $key) {
+            if (!empty($environment[$key])) {
+                $score++;
+            }
+        }
+
+        if ($score > $bestScore) {
+            $bestScore = $score;
+            $bestPath = $candidate;
+        }
+    }
+
+    return $bestPath;
 }
 
 function envQuote(string $value): string
@@ -190,7 +226,8 @@ function renderPage(
     bool $success = false,
     ?string $databaseMessage = null,
     bool $showForm = true,
-    string $csrf = ''
+    string $csrf = '',
+    ?string $environmentPath = null
 ): never {
     http_response_code(200);
     header('Content-Type: text/html; charset=utf-8');
@@ -253,6 +290,10 @@ function renderPage(
                 <div class="db-note"><strong>Databasecontrole:</strong> <?= htmlspecialchars($databaseMessage, ENT_QUOTES, 'UTF-8') ?></div>
             <?php endif; ?>
 
+            <?php if ($environmentPath !== null): ?>
+                <div class="db-note"><strong>Actief .env pad:</strong> <?= htmlspecialchars($environmentPath, ENT_QUOTES, 'UTF-8') ?></div>
+            <?php endif; ?>
+
             <?php if ($showForm): ?>
                 <form method="post" action="">
                     <input type="hidden" name="_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
@@ -278,6 +319,7 @@ function renderPage(
     exit;
 }
 
+$environmentPath = resolveEnvironmentPath($basePath);
 $environment = envData($environmentPath);
 $isInstalled = is_file($installedMarker) || filter_var($environment['INSTALLATION_LOCKED'] ?? false, FILTER_VALIDATE_BOOLEAN);
 $databaseMessage = null;
@@ -355,6 +397,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             true,
             'Databaseverbinding geslaagd.',
             false
+            ,
+            '',
+            $environmentPath
         );
     } catch (Throwable $exception) {
         $environment = envData($environmentPath);
@@ -369,7 +414,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             false,
             $databaseMessage,
             true,
-            $csrf
+            $csrf,
+            $environmentPath
         );
     }
 }
@@ -382,7 +428,9 @@ if ($isInstalled) {
         'De installer is afgesloten omdat het platform al geinstalleerd is.',
         true,
         $databaseMessage,
-        false
+        false,
+        '',
+        $environmentPath
     );
 }
 
@@ -394,5 +442,6 @@ renderPage(
     false,
     $databaseMessage,
     true,
-    $csrf
+    $csrf,
+    $environmentPath
 );

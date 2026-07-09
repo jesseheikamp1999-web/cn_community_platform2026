@@ -130,6 +130,40 @@ function hasAppKey(array $environment): bool
     return isset($environment['APP_KEY']) && trim((string) $environment['APP_KEY']) !== '';
 }
 
+function ensureDirectory(string $path): void
+{
+    if (!is_dir($path) && !@mkdir($path, 0775, true) && !is_dir($path)) {
+        throw new RuntimeException('Map kon niet worden aangemaakt: '.$path);
+    }
+
+    if (!is_writable($path)) {
+        @chmod($path, 0775);
+    }
+
+    if (!is_writable($path)) {
+        throw new RuntimeException('De map is niet schrijfbaar: '.$path);
+    }
+}
+
+function ensureRuntimeDirectories(string $basePath, string $bootstrapCachePath): void
+{
+    $directories = [
+        $bootstrapCachePath,
+        $basePath.'/storage',
+        $basePath.'/storage/app',
+        $basePath.'/storage/framework',
+        $basePath.'/storage/framework/cache',
+        $basePath.'/storage/framework/cache/data',
+        $basePath.'/storage/framework/sessions',
+        $basePath.'/storage/framework/views',
+        $basePath.'/storage/logs',
+    ];
+
+    foreach ($directories as $directory) {
+        ensureDirectory($directory);
+    }
+}
+
 function testDatabase(array $environment, ?string &$message = null): bool
 {
     if (!extension_loaded('pdo_mysql')) {
@@ -178,12 +212,15 @@ function testDatabase(array $environment, ?string &$message = null): bool
 
 function installerRequirements(string $basePath, array $environment, bool $databaseOk): array
 {
+    $bootstrapCachePath = $basePath.'/bootstrap/cache';
+
     return [
         ['label' => 'PHP 8.3+', 'ok' => version_compare(PHP_VERSION, '8.3.0', '>='), 'value' => PHP_VERSION],
         ['label' => 'PDO MySQL', 'ok' => extension_loaded('pdo_mysql'), 'value' => extension_loaded('pdo_mysql') ? 'Geinstalleerd' : 'Ontbreekt'],
         ['label' => 'OpenSSL', 'ok' => extension_loaded('openssl'), 'value' => extension_loaded('openssl') ? 'Geinstalleerd' : 'Ontbreekt'],
         ['label' => 'Mbstring', 'ok' => extension_loaded('mbstring') && function_exists('mb_split'), 'value' => extension_loaded('mbstring') ? 'Geinstalleerd' : 'Ontbreekt'],
         ['label' => 'Storage schrijfbaar', 'ok' => is_dir($basePath.'/storage') && is_writable($basePath.'/storage'), 'value' => is_dir($basePath.'/storage') && is_writable($basePath.'/storage') ? 'Schrijfbaar' : 'Niet schrijfbaar'],
+        ['label' => 'Bootstrap cache', 'ok' => is_dir($bootstrapCachePath) && is_writable($bootstrapCachePath), 'value' => is_dir($bootstrapCachePath) && is_writable($bootstrapCachePath) ? 'Schrijfbaar' : 'Ontbreekt of niet schrijfbaar'],
         ['label' => 'Vendor-bestanden', 'ok' => is_file($basePath.'/vendor/autoload.php'), 'value' => is_file($basePath.'/vendor/autoload.php') ? 'Aanwezig' : 'Ontbreken'],
         ['label' => 'Applicatiesleutel', 'ok' => hasAppKey($environment), 'value' => hasAppKey($environment) ? 'Ingesteld' : 'Wordt automatisch aangemaakt'],
         ['label' => 'Database bereikbaar', 'ok' => $databaseOk, 'value' => $databaseOk ? 'Verbonden' : 'Niet bereikbaar'],
@@ -359,6 +396,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_ENV['APP_KEY'] = $environment['APP_KEY'];
         $_SERVER['APP_KEY'] = $environment['APP_KEY'];
 
+        ensureRuntimeDirectories($basePath, $bootstrapCachePath);
         clearBootstrapCaches($bootstrapCachePath);
 
         if (!is_file($autoload) || !is_file($bootstrap)) {

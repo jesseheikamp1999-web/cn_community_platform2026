@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Repositories\ContentRepository;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Throwable;
 
 class HomeController extends Controller
 {
@@ -16,6 +17,13 @@ class HomeController extends Controller
     {
         $locale = app()->getLocale();
         $localized = fn (string $route, array $parameters = []) => route($route, ['locale' => $locale] + $parameters);
+        $safe = function (callable $resolver, mixed $fallback) {
+            try {
+                return $resolver();
+            } catch (Throwable) {
+                return $fallback;
+            }
+        };
 
         $divisionCards = [
             [
@@ -52,21 +60,22 @@ class HomeController extends Controller
             ],
         ];
 
-        $partners = Partner::where('status', 'active');
-        if (Schema::hasColumn('partners', 'is_featured')) {
-            $partners->where('is_featured', true)
-                ->orderBy('position')
-                ->orderByDesc('score');
-        } else {
-            $partners->orderBy('name');
-        }
+        $partners = $safe(function () {
+            $query = Partner::where('status', 'active');
 
-        return view('home', [
-            'news' => $content->latestNews(3),
-            'edition' => AwardEdition::where('type', 'cn_awards')->latest('year')->first(),
-            'winners' => Nomination::where('status', 'winner')->with('category')->latest('updated_at')->limit(4)->get(),
-            'partners' => $partners->limit(Schema::hasColumn('partners', 'is_featured') ? 10 : 6)->get(),
-            'staff' => User::whereIn('role', ['helper', 'moderator', 'admin', 'management', 'owner'])
+            if (Schema::hasColumn('partners', 'is_featured')) {
+                $query->where('is_featured', true)
+                    ->orderBy('position')
+                    ->orderByDesc('score');
+            } else {
+                $query->orderBy('name');
+            }
+
+            return $query->limit(Schema::hasColumn('partners', 'is_featured') ? 10 : 6)->get();
+        }, collect());
+
+        $staff = $safe(function () {
+            return User::whereIn('role', ['helper', 'moderator', 'admin', 'management', 'owner'])
                 ->with(['staffProfile', 'currentAbsence'])
                 ->withExists(['absenceRequests as is_currently_absent' => fn ($query) => $query->current()])
                 ->orderByRaw("CASE role
@@ -77,7 +86,57 @@ class HomeController extends Controller
                     WHEN 'helper' THEN 5
                     ELSE 6 END")
                 ->limit(4)
-                ->get(),
+                ->get();
+        }, collect());
+
+        $winners = $safe(function () {
+            if (! Schema::hasTable('nominations')) {
+                return collect();
+            }
+
+            return Nomination::where('status', 'winner')
+                ->with('category')
+                ->latest('updated_at')
+                ->limit(4)
+                ->get();
+        }, collect());
+
+        $edition = $safe(function () {
+            if (! Schema::hasTable('award_editions')) {
+                return null;
+            }
+
+            return AwardEdition::where('type', 'cn_awards')->latest('year')->first();
+        }, null);
+
+        $stats = $safe(function () {
+            return [
+                'members' => Schema::hasTable('discord_members')
+                    ? DB::table('discord_members')->where('is_active', true)->where('is_bot', false)->count()
+                    : User::whereNotNull('discord_id')->where('discord_id', '!=', '')->count(),
+                'votes' => Schema::hasTable('votes')
+                    ? DB::table('votes')->where('is_valid', true)->count()
+                    : 0,
+                'awards' => Schema::hasTable('award_winners')
+                    ? DB::table('award_winners')->count()
+                    : 0,
+                'projects' => Schema::hasTable('partners')
+                    ? Partner::where('status', 'active')->count()
+                    : 0,
+            ];
+        }, [
+            'members' => 0,
+            'votes' => 0,
+            'awards' => 0,
+            'projects' => 0,
+        ]);
+
+        return view('home', [
+            'news' => $content->latestNews(3),
+            'edition' => $edition,
+            'winners' => $winners,
+            'partners' => $partners,
+            'staff' => $staff,
             'divisionCards' => $divisionCards,
             'testimonials' => [
                 [
@@ -102,14 +161,7 @@ class HomeController extends Controller
                     'role' => $locale === 'en' ? 'Infrastructure partner' : 'Infrastructuurpartner',
                 ],
             ],
-            'stats' => [
-                'members' => Schema::hasTable('discord_members')
-                    ? DB::table('discord_members')->where('is_active', true)->where('is_bot', false)->count()
-                    : User::whereNotNull('discord_id')->where('discord_id', '!=', '')->count(),
-                'votes' => DB::table('votes')->where('is_valid', true)->count(),
-                'awards' => DB::table('award_winners')->count(),
-                'projects' => Partner::where('status', 'active')->count(),
-            ],
+            'stats' => $stats,
         ]);
     }
 }

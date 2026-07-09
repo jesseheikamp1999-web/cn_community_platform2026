@@ -164,6 +164,47 @@ function ensureRuntimeDirectories(string $basePath, string $bootstrapCachePath):
     }
 }
 
+function syncEnvironmentToRuntime(array $environment): void
+{
+    $keys = [
+        'APP_NAME',
+        'APP_ENV',
+        'APP_DEBUG',
+        'APP_URL',
+        'APP_KEY',
+        'APP_LOCALE',
+        'APP_FALLBACK_LOCALE',
+        'APP_TIMEZONE',
+        'LOG_CHANNEL',
+        'LOG_LEVEL',
+        'DB_CONNECTION',
+        'DB_HOST',
+        'DB_PORT',
+        'DB_DATABASE',
+        'DB_USERNAME',
+        'DB_PASSWORD',
+        'DB_SOCKET',
+        'CACHE_STORE',
+        'QUEUE_CONNECTION',
+        'SESSION_DRIVER',
+        'SESSION_COOKIE',
+        'SESSION_LIFETIME',
+        'INSTALLATION_LOCKED',
+    ];
+
+    foreach ($keys as $key) {
+        if (!array_key_exists($key, $environment)) {
+            continue;
+        }
+
+        $value = (string) $environment[$key];
+
+        putenv($key.'='.$value);
+        $_ENV[$key] = $value;
+        $_SERVER[$key] = $value;
+    }
+}
+
 function testDatabase(array $environment, ?string &$message = null): bool
 {
     if (!extension_loaded('pdo_mysql')) {
@@ -391,10 +432,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         writeEnvironment($environmentPath, $examplePath, ['INSTALLATION_LOCKED' => 'false']);
+        $environment['INSTALLATION_LOCKED'] = 'false';
 
-        putenv('APP_KEY='.$environment['APP_KEY']);
-        $_ENV['APP_KEY'] = $environment['APP_KEY'];
-        $_SERVER['APP_KEY'] = $environment['APP_KEY'];
+        syncEnvironmentToRuntime($environment);
 
         ensureRuntimeDirectories($basePath, $bootstrapCachePath);
         clearBootstrapCaches($bootstrapCachePath);

@@ -20,7 +20,16 @@ class SetPublicLocale
         }
 
         App::setLocale($locale);
-        $request->session()->put('public_locale', $locale);
+
+        if ($request->hasSession()) {
+            try {
+                $request->session()->put('public_locale', $locale);
+            } catch (\Throwable) {
+                // Publieke routes moeten blijven werken als sessies tijdelijk niet beschikbaar zijn.
+            }
+        }
+
+        cookie()->queue('public_locale', $locale, 60 * 24 * 30);
         URL::defaults(['locale' => $locale]);
 
         return $next($request);
@@ -28,9 +37,20 @@ class SetPublicLocale
 
     public static function preferredLocale(Request $request, array $supported = ['nl', 'en']): string
     {
-        $sessionLocale = (string) $request->session()->get('public_locale', '');
-        if (in_array($sessionLocale, $supported, true)) {
-            return $sessionLocale;
+        if ($request->hasSession()) {
+            try {
+                $sessionLocale = (string) $request->session()->get('public_locale', '');
+                if (in_array($sessionLocale, $supported, true)) {
+                    return $sessionLocale;
+                }
+            } catch (\Throwable) {
+                // Valt terug op cookie of browsertaal.
+            }
+        }
+
+        $cookieLocale = (string) $request->cookie('public_locale', '');
+        if (in_array($cookieLocale, $supported, true)) {
+            return $cookieLocale;
         }
 
         $browserLocale = substr((string) $request->getPreferredLanguage($supported), 0, 2);

@@ -1100,8 +1100,9 @@ class PlatformTest extends TestCase
         $this->assertTrue(collect($response['items'])->contains(
             fn (array $item) => ($item['type'] ?? null) === 'panel'
                 && ($item['key'] ?? null) === 'cn-pulse'
-                && str_starts_with((string) ($item['version'] ?? ''), 'v')
+                && str_starts_with((string) ($item['version'] ?? ''), 'cn-pulse-')
                 && data_get($item, 'payload.title') === 'CN Pulse'
+                && data_get($item, 'channel') === 'cn-pulse'
                 && isset($item['changed'])
         ));
         $this->assertDatabaseHas('discord_sync_requests', [
@@ -1131,6 +1132,7 @@ class PlatformTest extends TestCase
             ->assertJson(['success' => true])
             ->json();
 
+        $this->assertFalse((bool) data_get($second, 'changed'));
         $this->assertFalse((bool) data_get($second, 'item.changed'));
         $this->assertDatabaseHas('discord_sync_requests', [
             'channel_key' => 'awards-info',
@@ -1212,6 +1214,97 @@ class PlatformTest extends TestCase
             ->getJson('/api/discord-sync?channel=cn-pulse')
             ->assertOk()
             ->assertJson(['success' => true]);
+    }
+
+    public function test_discord_sync_api_formats_loose_items_for_bot_processing(): void
+    {
+        config(['services.discord_sync.api_key' => 'secret-sync-key']);
+
+        $birthdayUser = User::factory()->create([
+            'name' => 'Jesse',
+            'birth_date' => today()->subYears(21),
+            'birthday_visibility' => 'community',
+        ]);
+
+        $staff = User::factory()->create(['role' => \App\Enums\UserRole::Moderator]);
+        $staff->absenceRequests()->create([
+            'starts_on' => today(),
+            'ends_on' => today()->addDay(),
+            'reason' => '[vakantie] Even offline',
+            'status' => 'approved',
+        ]);
+
+        $article = Content::create([
+            'title' => 'Nieuwe MijnCN update',
+            'slug' => 'nieuwe-mijncn-update',
+            'type' => 'news',
+            'status' => 'published',
+            'excerpt' => 'MijnCN heeft nieuwe functies gekregen.',
+            'body' => 'MijnCN heeft nieuwe functies gekregen.',
+            'published_at' => now(),
+            'meta' => ['source' => 'CN Community'],
+        ]);
+
+        $response = $this->withHeader('x-api-key', 'secret-sync-key')
+            ->getJson('/api/discord-sync')
+            ->assertOk()
+            ->json();
+
+        $news = collect($response['items'])->firstWhere('id', 'news-'.$article->id);
+        $birthday = collect($response['items'])->firstWhere('id', 'birthday-'.$birthdayUser->id.'-'.today()->toDateString());
+        $absence = collect($response['items'])->firstWhere('type', 'staff-absence');
+
+        $this->assertSame('news', data_get($news, 'channel'));
+        $this->assertSame('Nieuwe MijnCN update', data_get($news, 'payload.title'));
+        $this->assertSame('Jesse', data_get($birthday, 'payload.name'));
+        $this->assertSame('birthdays', data_get($birthday, 'channel'));
+        $this->assertSame('staff-status', data_get($absence, 'channel'));
+        $this->assertStringContainsString('Even offline', (string) data_get($absence, 'payload.reason'));
+        $this->assertNotEmpty((string) data_get($absence, 'payload.roster_url'));
+    }
+
+    public function test_cn_pulse_nomination_reminder_runs_once_per_slot(): void
+    {
+        Http::fake();
+        config(['services.discord.webhook_url' => 'https://discord.test/webhook']);
+
+        \App\Models\DiscordChannel::create([
+            'discord_channel_id' => 'cn-pulse',
+            'name' => '📡┃cn-pulse',
+            'purpose' => 'cn-pulse',
+            'webhook_url' => 'https://discord.test/webhook',
+            'is_active' => true,
+        ]);
+
+        $edition = AwardEdition::create([
+            'name' => 'CN Awards 2026',
+            'slug' => 'cn-awards-2026-reminder',
+            'type' => 'cn_awards',
+            'year' => 2026,
+            'status' => 'nominations',
+        ]);
+
+        $this->travelTo(now()->setTime(10, 5));
+
+        $automation = app(CommunityAutomationService::class);
+        $this->assertSame(1, $automation->processCnPulseReminders());
+        $this->assertSame(0, $automation->processCnPulseReminders());
+
+        $this->assertDatabaseHas('automation_logs', [
+            'key' => 'cn-pulse:nomination-reminder:'.today()->toDateString().':10',
+            'type' => 'cn_pulse_reminder',
+        ]);
+
+        Http::assertSentCount(1);
+        Http::assertSent(function ($request) {
+            $payload = $request->data();
+
+            return str_contains($request->url(), 'discord.test/webhook')
+                && ($payload['content'] ?? null) === '<@&1463859757105283244>'
+                && data_get($payload, 'embeds.0.title') === 'Tijd om iemand in de spotlight te zetten';
+        });
+
+        $this->travelBack();
     }
 
     public function test_management_cannot_manage_discord_sync_api_key(): void

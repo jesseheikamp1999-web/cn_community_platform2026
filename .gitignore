@@ -5,7 +5,6 @@
 /public/storage
 /storage/*.key
 /storage/logs/*.log
-/vendor
 /work
 /outputs
 /app.zip

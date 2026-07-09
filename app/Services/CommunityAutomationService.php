@@ -29,6 +29,7 @@ class CommunityAutomationService
             'birthdays' => $this->processBirthdays(),
             'news' => $this->processPublishedNews(),
             'staff_status' => $this->processStaffStatus(),
+            'cn_pulse_reminders' => $this->processCnPulseReminders(),
         ];
     }
 
@@ -260,7 +261,13 @@ class CommunityAutomationService
             ->where('status', 'approved')
             ->when(
                 Schema::hasColumns('absence_requests', ['starts_at', 'ends_at']),
-                fn ($query) => $query->where('ends_at', '>=', now()->subDay()),
+                fn ($query) => $query->where(function ($absenceQuery) {
+                    $absenceQuery->where('ends_at', '>=', now()->subDay())
+                        ->orWhere(function ($legacyQuery) {
+                            $legacyQuery->whereNull('ends_at')
+                                ->whereDate('ends_on', '>=', today()->subDay());
+                        });
+                }),
                 fn ($query) => $query->whereDate('ends_on', '>=', today()->subDay())
             )
             ->latest(Schema::hasColumn('absence_requests', 'starts_at') ? 'starts_at' : 'starts_on')
@@ -273,6 +280,55 @@ class CommunityAutomationService
             });
 
         return $processed;
+    }
+
+    public function processCnPulseReminders(): int
+    {
+        $edition = AwardEdition::where('type', 'cn_awards')->latest('year')->first();
+        if (!$edition || $edition->status !== 'nominations') {
+            return 0;
+        }
+
+        $hour = (int) now()->format('G');
+        if (!in_array($hour, [10, 22], true)) {
+            return 0;
+        }
+
+        $key = 'cn-pulse:nomination-reminder:'.today()->toDateString().':'.$hour;
+        if (!$this->claim($key, 'cn_pulse_reminder', ['hour' => $hour, 'edition_id' => $edition->id])) {
+            return 0;
+        }
+
+        $this->sendDiscord('cn-pulse', [
+            'content' => '<@&1463859757105283244>',
+            'embeds' => [[
+                'title' => 'Tijd om iemand in de spotlight te zetten',
+                'description' => 'Nomineer jezelf of iemand uit CN Community voor de Awards en geef diegene het podium dat verdiend is.',
+                'color' => 14883619,
+                'fields' => [[
+                    'name' => 'Fase',
+                    'value' => 'Nominaties staan nu open voor '.$edition->name.'.',
+                    'inline' => false,
+                ], [
+                    'name' => 'Waarom nu?',
+                    'value' => 'Hoe eerder een sterke nominatie binnenkomt, hoe beter staff en jury die kunnen verwerken.',
+                    'inline' => false,
+                ]],
+                'footer' => ['text' => 'CN Pulse reminder · automatisch om 10:00 en 22:00'],
+                'timestamp' => now()->toIso8601String(),
+            ]],
+            'components' => [[
+                'type' => 1,
+                'components' => [[
+                    'type' => 2,
+                    'style' => 5,
+                    'label' => 'Nu nomineren',
+                    'url' => route('awards'),
+                ]],
+            ]],
+        ]);
+
+        return 1;
     }
 
     private function announceAwardRound(AwardRound $round): void

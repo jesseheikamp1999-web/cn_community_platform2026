@@ -5,6 +5,7 @@ namespace App\Providers;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
+use Throwable;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -21,10 +22,21 @@ class AppServiceProvider extends ServiceProvider
         $locale = 'nl';
 
         if (! $this->app->runningInConsole()) {
-            $locale = request()->route('locale')
-                ?? session('public_locale')
-                ?? App::currentLocale()
-                ?? 'nl';
+            $request = request();
+
+            if ($request->route('locale')) {
+                $locale = $request->route('locale');
+            } elseif (!config('platform.installation_locked') && $request->is('install*')) {
+                $locale = 'nl';
+            } else {
+                try {
+                    $locale = session('public_locale')
+                        ?? App::currentLocale()
+                        ?? 'nl';
+                } catch (Throwable) {
+                    $locale = App::currentLocale() ?? 'nl';
+                }
+            }
         }
 
         URL::defaults(['locale' => $locale]);

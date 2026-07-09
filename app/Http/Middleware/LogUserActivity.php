@@ -13,11 +13,15 @@ class LogUserActivity
     {
         $response = $next($request);
 
-        if ($request->user() && $request->isMethod('GET')) {
+        if (!$request->user() || !$request->route() || !config('platform.installation_locked') || $request->is('install*')) {
+            return $response;
+        }
+
+        if ($request->isMethod('GET')) {
             $request->user()->forceFill(['last_seen_at' => now()])->saveQuietly();
         }
 
-        if ($request->user() && !$request->isMethod('GET')) {
+        if (!$request->isMethod('GET')) {
             DB::table('activity_logs')->insert([
                 'user_id' => $request->user()->id,
                 'event' => strtolower($request->method()).':'.$request->route()?->getName(),

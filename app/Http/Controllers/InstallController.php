@@ -30,7 +30,7 @@ class InstallController extends Controller
                 'PDO MySQL' => extension_loaded('pdo_mysql'),
                 'OpenSSL' => extension_loaded('openssl'),
                 'Storage schrijfbaar' => is_writable(storage_path()),
-                'Bootstrap cache schrijfbaar' => $this->bootstrapCacheWritable(),
+                'Bootstrap cache beschikbaar' => $this->bootstrapCacheReady(),
                 'Applicatiesleutel ingesteld' => filled(config('app.key')),
                 'Database bereikbaar' => $databaseAvailable,
             ],
@@ -44,7 +44,10 @@ class InstallController extends Controller
         $request->validate(['confirm' => ['accepted']]);
 
         try {
-            $this->bootstrapCacheWritable();
+            if (! $this->bootstrapCacheReady()) {
+                throw new \RuntimeException('Bootstrap cache is niet beschikbaar voor Laravel.');
+            }
+
             DB::connection()->getPdo();
             Artisan::call('migrate', ['--force' => true]);
             Artisan::call('db:seed', ['--force' => true]);
@@ -55,7 +58,7 @@ class InstallController extends Controller
         return view('pages.install-complete');
     }
 
-    private function bootstrapCacheWritable(): bool
+    private function bootstrapCacheReady(): bool
     {
         $path = base_path('bootstrap/cache');
 
@@ -64,22 +67,51 @@ class InstallController extends Controller
                 File::ensureDirectoryExists($path);
             }
 
-            if (! is_dir($path) || ! is_writable($path)) {
+            if (! is_dir($path)) {
                 return false;
             }
 
-            $probe = $path.DIRECTORY_SEPARATOR.'.write-test-'.uniqid('', true);
-            $written = @file_put_contents($probe, 'ok');
-
-            if ($written === false) {
-                return false;
+            if ($this->canWriteToBootstrapCache($path)) {
+                return true;
             }
 
-            @unlink($probe);
-
-            return true;
+            return $this->hasCompiledBootstrapCache($path);
         } catch (Throwable) {
             return false;
         }
+    }
+
+    private function canWriteToBootstrapCache(string $path): bool
+    {
+        if (! is_writable($path)) {
+            return false;
+        }
+
+        $probe = $path.DIRECTORY_SEPARATOR.'.write-test-'.uniqid('', true);
+        $written = @file_put_contents($probe, 'ok');
+
+        if ($written === false) {
+            return false;
+        }
+
+        @unlink($probe);
+
+        return true;
+    }
+
+    private function hasCompiledBootstrapCache(string $path): bool
+    {
+        $requiredFiles = [
+            $path.DIRECTORY_SEPARATOR.'packages.php',
+            $path.DIRECTORY_SEPARATOR.'services.php',
+        ];
+
+        foreach ($requiredFiles as $file) {
+            if (! File::exists($file) || ! is_readable($file)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }

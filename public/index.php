@@ -20,14 +20,100 @@ if (!function_exists('mb_split')) {
     }
 }
 
+if (!function_exists('envData')) {
+    function envData(string $path): array
+    {
+        if (!is_file($path)) {
+            return [];
+        }
+
+        $values = [];
+
+        foreach (file($path, FILE_IGNORE_NEW_LINES) ?: [] as $line) {
+            $line = trim($line);
+
+            if ($line === '' || str_starts_with($line, '#') || !str_contains($line, '=')) {
+                continue;
+            }
+
+            [$key, $value] = explode('=', $line, 2);
+            $value = trim($value);
+
+            if (
+                strlen($value) >= 2
+                && (($value[0] === '"' && $value[-1] === '"') || ($value[0] === "'" && $value[-1] === "'"))
+            ) {
+                $value = substr($value, 1, -1);
+            }
+
+            $values[trim($key)] = str_replace(['\\"', '\\\\'], ['"', '\\'], $value);
+        }
+
+        return $values;
+    }
+}
+
+if (!function_exists('resolveEnvironmentPath')) {
+    function resolveEnvironmentPath(string $basePath): string
+    {
+        $candidates = [
+            $basePath.'/.env',
+            dirname($basePath).'/.env',
+            dirname($basePath, 2).'/.env',
+            dirname($basePath, 3).'/.env',
+            $basePath.'/public/.env',
+        ];
+
+        $fallback = $candidates[0];
+        $bestPath = $fallback;
+        $bestScore = -1;
+
+        foreach ($candidates as $candidate) {
+            if (!is_file($candidate)) {
+                continue;
+            }
+
+            $environment = envData($candidate);
+            $score = 0;
+
+            foreach (['APP_NAME', 'APP_ENV', 'APP_KEY', 'DB_HOST', 'DB_DATABASE', 'DB_USERNAME'] as $key) {
+                if (!empty($environment[$key])) {
+                    $score++;
+                }
+            }
+
+            if ($score > $bestScore) {
+                $bestScore = $score;
+                $bestPath = $candidate;
+            }
+        }
+
+        return $bestPath;
+    }
+}
+
+if (!function_exists('syncEnvironmentToRuntime')) {
+    function syncEnvironmentToRuntime(array $environment): void
+    {
+        foreach ($environment as $key => $value) {
+            $value = (string) $value;
+
+            putenv($key.'='.$value);
+            $_ENV[$key] = $value;
+            $_SERVER[$key] = $value;
+        }
+    }
+}
+
 $basePath = dirname(__DIR__);
 $installedMarker = $basePath.'/storage/app/installed';
-$environmentPath = $basePath.'/.env';
+$environmentPath = resolveEnvironmentPath($basePath);
 $installationLocked = false;
+$environmentValues = envData($environmentPath);
 
-if (is_file($environmentPath)) {
-    $environment = (string) file_get_contents($environmentPath);
-    $installationLocked = preg_match('/^INSTALLATION_LOCKED\s*=\s*(true|1|yes)\s*$/mi', $environment) === 1;
+if ($environmentValues !== []) {
+    syncEnvironmentToRuntime($environmentValues);
+    $installationLocked = filter_var($environmentValues['INSTALLATION_LOCKED'] ?? false, FILTER_VALIDATE_BOOLEAN);
 }
 
 if (!is_file($installedMarker) && !$installationLocked) {

@@ -11,6 +11,7 @@ $basePath = dirname(__DIR__, 2);
 $autoload = $basePath.'/vendor/autoload.php';
 $bootstrap = $basePath.'/bootstrap/app.php';
 $environmentPath = $basePath.'/.env';
+$bootstrapCachePath = $basePath.'/bootstrap/cache';
 
 if (!function_exists('installerRequirements')) {
     function installerRequirements(string $basePath): array
@@ -139,6 +140,29 @@ if (str_starts_with($path, '/install/')) {
 $_SERVER['REQUEST_URI'] = $path.(isset($uriParts['query']) ? '?'.$uriParts['query'] : '');
 $_SERVER['SCRIPT_NAME'] = '/index.php';
 $_SERVER['PHP_SELF'] = '/index.php';
+
+if (is_dir($bootstrapCachePath)) {
+    foreach ([
+        'config.php',
+        'packages.php',
+        'services.php',
+        'events.php',
+        'routes.php',
+        'routes-v7.php',
+    ] as $cacheFile) {
+        $fullPath = $bootstrapCachePath.'/'.$cacheFile;
+
+        if (is_file($fullPath)) {
+            @unlink($fullPath);
+        }
+    }
+
+    foreach (glob($bootstrapCachePath.'/routes-*.php') ?: [] as $routeCache) {
+        if (is_file($routeCache)) {
+            @unlink($routeCache);
+        }
+    }
+}
 
 require $autoload;
 

@@ -1,5 +1,20 @@
 <?php
 
+if (!function_exists('mb_split')) {
+    /**
+     * Fallback for hosting environments where mbstring is enabled
+     * but the mb_split helper itself is unavailable.
+     */
+    function mb_split(string $pattern, string $string, int $limit = -1): array|false
+    {
+        $delimited = '/'.str_replace('/', '\/', $pattern).'/u';
+
+        $result = preg_split($delimited, $string, $limit);
+
+        return $result === false ? false : $result;
+    }
+}
+
 use App\Http\Middleware\EnsureInstallationCompleted;
 use App\Http\Middleware\SetPublicLocale;
 use App\Http\Middleware\EnsureUserHasPermission;
